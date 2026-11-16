@@ -84,6 +84,28 @@ public sealed class XtreamClient
         }
     }
 
+    /// <summary>Xtream yayin akisini (XMLTV) akis olarak acar. Yanit cagiran tarafindan kapatilir.</summary>
+    public async Task<HttpResponseMessage> OpenXmltvAsync(CancellationToken ct)
+    {
+        var url = $"{_base}/xmltv.php?username={Uri.EscapeDataString(_user)}&password={Uri.EscapeDataString(_pass)}";
+        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.TryAddWithoutValidation("User-Agent", UserAgent);
+        var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        if (!resp.IsSuccessStatusCode)
+        {
+            var code = (int)resp.StatusCode;
+            resp.Dispose();
+            throw new HttpRequestException($"Xtream sunucusu HTTP {code} dondurdu (xmltv).");
+        }
+
+        return resp;
+    }
+
+    public const string UserAgent = "VLC/3.0.20 LibVLC/3.0.20";
+
+    public string LiveUrl(string streamId, string ext) =>
+        $"{_base}/live/{Uri.EscapeDataString(_user)}/{Uri.EscapeDataString(_pass)}/{streamId}.{ext}";
+
     public string MovieUrl(string streamId, string ext) =>
         $"{_base}/movie/{Uri.EscapeDataString(_user)}/{Uri.EscapeDataString(_pass)}/{streamId}.{ext}";
 

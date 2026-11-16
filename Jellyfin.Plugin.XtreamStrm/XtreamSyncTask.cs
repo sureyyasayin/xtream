@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Jellyfin.Plugin.XtreamStrm.Configuration;
+using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
@@ -17,14 +18,20 @@ public class XtreamSyncTask : IScheduledTask
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILibraryManager _libraryManager;
     private readonly ILogger<XtreamSyncTask> _logger;
+    private readonly IServerConfigurationManager _configurationManager;
+    private readonly ITaskManager _taskManager;
 
     public XtreamSyncTask(
         IHttpClientFactory httpClientFactory,
         ILibraryManager libraryManager,
+        IServerConfigurationManager configurationManager,
+        ITaskManager taskManager,
         ILogger<XtreamSyncTask> logger)
     {
         _httpClientFactory = httpClientFactory;
         _libraryManager = libraryManager;
+        _configurationManager = configurationManager;
+        _taskManager = taskManager;
         _logger = logger;
     }
 
@@ -97,16 +104,40 @@ public class XtreamSyncTask : IScheduledTask
 
         progress.Report(95);
 
+        // Canli TV, film/dizi senkronizasyonundan bagimsizdir.
+        var liveText = string.Empty;
+        try
+        {
+            var live = new LiveTvSync(_configurationManager, _logger);
+            var (channels, liveChanged) = await live.RunAsync(client, cfg, plugin, cancellationToken).ConfigureAwait(false);
+            liveText = $" Canli TV kanali: {channels}.";
+            if (liveChanged)
+            {
+                QueueGuideRefresh();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            SaveManifest(plugin, manifest, run, false, false, "Senkronizasyon iptal edildi.");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Xtream STRM: canli TV senkronizasyon hatasi");
+            liveText = " Canli TV HATASI: " + ex.Message;
+            error ??= "Canli TV: " + ex.Message;
+        }
+
         var cleanup = complete && cfg.RemoveOrphans;
         if (cleanup)
         {
             RemoveOrphans(manifest, run);
         }
 
-        var message = error != null
-            ? $"HATA: {error} (hicbir dosya silinmedi)"
+        var message = !complete
+            ? $"HATA: {error} (hicbir dosya silinmedi).{liveText}"
             : $"Film: {run.Movies}, dizi: {run.Series}, bolum: {run.Episodes}. Yeni/guncellenen dosya: {run.Written}, silinen: {run.Deleted}, " +
-              $"mevcut klasor oldugu icin atlanan: {run.SkippedExisting}, hatali dizi: {run.FailedSeries}.";
+              $"mevcut klasor oldugu icin atlanan: {run.SkippedExisting}, hatali dizi: {run.FailedSeries}.{liveText}";
 
         SaveManifest(plugin, manifest, run, complete, cleanup, message);
         _logger.LogInformation("Xtream STRM: {Message}", message);
@@ -121,6 +152,23 @@ public class XtreamSyncTask : IScheduledTask
         if (error != null)
         {
             throw new InvalidOperationException("Xtream STRM senkronizasyonu basarisiz: " + error);
+        }
+    }
+
+    /// <summary>Jellyfin'in kendi "Rehberi Yenile" gorevini kuyruga alir (kanal listesi ve EPG yeniden okunur).</summary>
+    private void QueueGuideRefresh()
+    {
+        try
+        {
+            var worker = _taskManager.ScheduledTasks.FirstOrDefault(t => t.ScheduledTask.Key == "RefreshGuide");
+            if (worker != null)
+            {
+                _taskManager.QueueScheduledTask(worker.ScheduledTask, new TaskOptions());
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("Xtream STRM: rehber yenileme baslatilamadi: {Error}", ex.Message);
         }
     }
 

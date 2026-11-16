@@ -26,6 +26,12 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// <summary>Eklentinin olusturdugu dosyalarin kaydi.</summary>
     public string ManifestPath => Path.Combine(DataFolderPath, "manifest.json");
 
+    /// <summary>Canli TV kanal listesi (Jellyfin M3U tuner'i bu dosyayi okur).</summary>
+    public string LiveM3uPath => Path.Combine(DataFolderPath, "live.m3u");
+
+    /// <summary>Secili kanallara suzulmus yayin akisi (XMLTV).</summary>
+    public string LiveEpgPath => Path.Combine(DataFolderPath, "epg.xml");
+
     public IEnumerable<PluginPageInfo> GetPages()
     {
         yield return new PluginPageInfo

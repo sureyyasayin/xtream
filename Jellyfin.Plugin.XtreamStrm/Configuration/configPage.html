@@ -5,12 +5,12 @@
     <title>Xtream STRM</title>
 </head>
 <body>
-<div id="XtreamStrmConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox">
+<div id="XtreamStrmConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox,emby-select">
     <div data-role="content">
         <div class="content-primary">
             <form id="XtreamStrmConfigForm">
                 <h2 class="sectionTitle">Xtream STRM</h2>
-                <p>Xtream hesabınızdaki film ve diziler, seçtiğiniz kategorilerden <b>.strm</b> kısayolları olarak medya klasörlerine yazılır. Dosyalar indirilmez; oynatınca doğrudan Xtream sunucusundan akar.</p>
+                <p>Xtream hesabınızdaki film ve diziler, seçtiğiniz kategorilerden <b>.strm</b> kısayolları olarak medya klasörlerine yazılır; canlı kanallar Jellyfin'in <b>Canlı TV</b> bölümüne eklenir. Dosyalar indirilmez; oynatınca doğrudan Xtream sunucusundan akar.</p>
 
                 <div class="inputContainer">
                     <label class="inputLabel inputLabelUnfocused" for="xsBaseUrl">Xtream adresi</label>
@@ -63,6 +63,33 @@
                 </div>
                 <div id="xsSeriesCats" style="max-height:22em;overflow-y:auto;border:1px solid rgba(128,128,128,.4);border-radius:.3em;padding:.5em 1em;margin:.5em 0 1.5em;"></div>
 
+                <h3>Canlı TV</h3>
+                <label class="checkboxContainer">
+                    <input id="xsSyncLive" type="checkbox" is="emby-checkbox" />
+                    <span>Canlı TV kanallarını Jellyfin Canlı TV'ye ekle</span>
+                </label>
+                <div>
+                    <button is="emby-button" type="button" class="xsAll" data-target="xsLiveCats" data-on="1"><span>Tümünü seç</span></button>
+                    <button is="emby-button" type="button" class="xsAll" data-target="xsLiveCats" data-on="0"><span>Hiçbirini seçme</span></button>
+                </div>
+                <div id="xsLiveCats" style="max-height:22em;overflow-y:auto;border:1px solid rgba(128,128,128,.4);border-radius:.3em;padding:.5em 1em;margin:.5em 0 1em;"></div>
+                <label class="checkboxContainer">
+                    <input id="xsLiveUseEpg" type="checkbox" is="emby-checkbox" />
+                    <span>Xtream yayın akışını (EPG / TV rehberi) kullan</span>
+                </label>
+                <div class="selectContainer">
+                    <label class="selectLabel" for="xsLiveFormat">Yayın biçimi</label>
+                    <select id="xsLiveFormat" is="emby-select" class="emby-select-withcolor emby-select">
+                        <option value="ts">MPEG-TS (.ts) — önerilen</option>
+                        <option value="m3u8">HLS (.m3u8)</option>
+                    </select>
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="xsLiveTunerCount">Aynı anda izlenebilecek kanal sayısı</label>
+                    <input id="xsLiveTunerCount" type="number" min="0" is="emby-input" />
+                    <div class="fieldDescription" style="margin-bottom:1.5em;">Xtream hesabınızın bağlantı sınırını girin (0 = sınırsız). Kanallar senkronizasyondan sonra Jellyfin'in <b>Canlı TV</b> bölümünde görünür.</div>
+                </div>
+
                 <h3>Seçenekler</h3>
                 <label class="checkboxContainer">
                     <input id="xsRemoveOrphans" type="checkbox" is="emby-checkbox" />
@@ -90,7 +117,7 @@
     <script type="text/javascript">
         (function () {
             var pluginId = '7b1f6c3e-52a4-4d0e-9a65-3c8e0f4d2b71';
-            var selected = { xsMovieCats: [], xsSeriesCats: [] };
+            var selected = { xsMovieCats: [], xsSeriesCats: [], xsLiveCats: [] };
 
             function $(page, sel) { return page.querySelector(sel); }
 
@@ -127,7 +154,7 @@
             }
 
             function placeholder(page) {
-                ['xsMovieCats', 'xsSeriesCats'].forEach(function (id) {
+                ['xsMovieCats', 'xsSeriesCats', 'xsLiveCats'].forEach(function (id) {
                     $(page, '#' + id).textContent = selected[id].length
                         ? selected[id].length + ' kategori seçili. Listeyi görmek için "Kategorileri getir"e basın.'
                         : 'Henüz kategori seçilmedi. "Kategorileri getir"e basın. Seçim yapılmazsa hiçbir içerik alınmaz.';
@@ -149,6 +176,11 @@
                     $(page, '#xsScan').checked = !!c.ScanLibraryAfterSync;
                     selected.xsMovieCats = (c.MovieCategoryIds || []).map(String);
                     selected.xsSeriesCats = (c.SeriesCategoryIds || []).map(String);
+                    selected.xsLiveCats = (c.LiveCategoryIds || []).map(String);
+                    $(page, '#xsSyncLive').checked = !!c.SyncLive;
+                    $(page, '#xsLiveUseEpg').checked = !!c.LiveUseEpg;
+                    $(page, '#xsLiveFormat').value = c.LiveFormat === 'm3u8' ? 'm3u8' : 'ts';
+                    $(page, '#xsLiveTunerCount').value = c.LiveTunerCount || 0;
                     placeholder(page);
                     Dashboard.hideLoadingMsg();
                     if (c.BaseUrl && c.Username) { loadCats(page, true); }
@@ -170,6 +202,11 @@
                     c.ScanLibraryAfterSync = $(page, '#xsScan').checked;
                     c.MovieCategoryIds = selected.xsMovieCats = checkedIds(page, 'xsMovieCats');
                     c.SeriesCategoryIds = selected.xsSeriesCats = checkedIds(page, 'xsSeriesCats');
+                    c.LiveCategoryIds = selected.xsLiveCats = checkedIds(page, 'xsLiveCats');
+                    c.SyncLive = $(page, '#xsSyncLive').checked;
+                    c.LiveUseEpg = $(page, '#xsLiveUseEpg').checked;
+                    c.LiveFormat = $(page, '#xsLiveFormat').value;
+                    c.LiveTunerCount = parseInt($(page, '#xsLiveTunerCount').value, 10) || 0;
                     return ApiClient.updatePluginConfiguration(pluginId, c).then(function (r) {
                         if (!quiet) { Dashboard.processPluginConfigurationUpdateResult(r); }
                     });
@@ -183,7 +220,8 @@
                     if (!r.ok) { if (!silent) { out.textContent = r.message; } return; }
                     renderCats(page, 'xsMovieCats', r.movies);
                     renderCats(page, 'xsSeriesCats', r.series);
-                    if (!silent) { out.textContent = r.movies.length + ' film kategorisi, ' + r.series.length + ' dizi kategorisi bulundu.'; }
+                    renderCats(page, 'xsLiveCats', r.live || []);
+                    if (!silent) { out.textContent = r.movies.length + ' film kategorisi, ' + r.series.length + ' dizi kategorisi, ' + (r.live || []).length + ' canlı TV kategorisi bulundu.'; }
                 }).catch(function () { if (!silent) { out.textContent = 'Kategoriler alınamadı.'; } });
             }
 

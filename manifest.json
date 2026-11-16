@@ -2,11 +2,19 @@
   {
     "guid": "7b1f6c3e-52a4-4d0e-9a65-3c8e0f4d2b71",
     "name": "Xtream STRM",
-    "description": "Xtream hesabindaki film ve dizileri, sectiginiz kategorilerden .strm kisayollari olarak Jellyfin medya klasorlerine yazar. Dosyalar indirilmez; oynatinca dogrudan Xtream sunucusundan akar. Adres, kullanici adi ve sifre eklenti ayar sayfasindan girilir.",
-    "overview": "Xtream film ve dizilerini .strm kisayollari olarak kutuphaneye ekler",
+    "description": "Xtream hesabindaki film ve dizileri, sectiginiz kategorilerden .strm kisayollari olarak Jellyfin medya klasorlerine yazar; canli kanallari Jellyfin Canli TV'ye ekler. Dosyalar indirilmez; oynatinca dogrudan Xtream sunucusundan akar. Adres, kullanici adi ve sifre eklenti ayar sayfasindan girilir.",
+    "overview": "Xtream film, dizi ve canli TV kanallarini Jellyfin'e ekler",
     "owner": "sureyyasayin",
     "category": "General",
     "versions": [
+      {
+        "version": "1.1.0.0",
+        "changelog": "Canli TV: secilen Xtream canli kategorileri Jellyfin Canli TV'ye tuner olarak eklenir, yayin akisi (EPG) baglanir.",
+        "targetAbi": "12.4.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/sureyyasayin/xtream/main/releases/xtream-strm_1.1.0.0.zip",
+        "checksum": "881bf090cb864ec36aea8164bf91732a",
+        "timestamp": "2026-11-16T18:00:00Z"
+      },
       {
         "version": "1.0.0.0",
         "changelog": "Ilk surum: kategori secimi, film/dizi .strm senkronizasyonu, gunluk zamanlanmis gorev.",

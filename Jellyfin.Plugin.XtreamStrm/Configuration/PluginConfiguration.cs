@@ -28,6 +28,21 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>Senkronize edilecek dizi kategorileri. Bos ise hicbir dizi alinmaz.</summary>
     public string[] SeriesCategoryIds { get; set; } = Array.Empty<string>();
 
+    /// <summary>Canli TV kanallarini Jellyfin Canli TV'ye ekle.</summary>
+    public bool SyncLive { get; set; } = true;
+
+    /// <summary>Alinacak canli TV kategorileri. Bos ise hicbir kanal alinmaz.</summary>
+    public string[] LiveCategoryIds { get; set; } = Array.Empty<string>();
+
+    /// <summary>Xtream yayin akisini (EPG) kullan.</summary>
+    public bool LiveUseEpg { get; set; } = true;
+
+    /// <summary>Kanal yayin bicimi: ts veya m3u8.</summary>
+    public string LiveFormat { get; set; } = "ts";
+
+    /// <summary>Ayni anda acilabilecek yayin sayisi (0 = sinirsiz).</summary>
+    public int LiveTunerCount { get; set; }
+
     /// <summary>Xtream listesinden kalkan icerigin .strm dosyalarini sil.</summary>
     public bool RemoveOrphans { get; set; } = true;
 

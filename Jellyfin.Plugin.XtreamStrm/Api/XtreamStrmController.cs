@@ -72,7 +72,8 @@ public class XtreamStrmController : ControllerBase
         {
             var movies = await ReadCategories(client, "get_vod_categories", ct).ConfigureAwait(false);
             var series = await ReadCategories(client, "get_series_categories", ct).ConfigureAwait(false);
-            return Ok(new { ok = true, movies, series });
+            var live = await ReadCategories(client, "get_live_categories", ct).ConfigureAwait(false);
+            return Ok(new { ok = true, movies, series, live });
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

@@ -18,7 +18,7 @@ Gereken sürüm: **Jellyfin 12.4** veya üzeri.
 
 1. **Kontrol Paneli → Eklentiler → Xtream STRM** sayfasını açın.
 2. Xtream adresini, kullanıcı adını ve şifreyi girip **Kaydet ve bağlantıyı test et**'e basın.
-3. Açılan listelerden istediğiniz film ve dizi kategorilerini işaretleyin. Seçim yapılmayan türden içerik alınmaz.
+3. Açılan listelerden istediğiniz film, dizi ve canlı TV kategorilerini işaretleyin. Seçim yapılmayan türden içerik alınmaz.
 4. Film ve dizi klasörlerinin, kütüphanelerinizin klasörleri olduğunu kontrol edin (varsayılan: `/data/movies` ve `/data/tvshows`).
 5. **Kaydet ve şimdi senkronize et**'e basın. İlerleme **Zamanlanmış Görevler** altında görünür.
 
@@ -28,6 +28,7 @@ Senkronizasyon her gece 04:00'te kendiliğinden tekrarlanır; saat Zamanlanmış
 
 - Film: `Film Adı (Yıl) [tmdbid-123]/Film Adı (Yıl).strm`
 - Dizi: `Dizi Adı (Yıl)/Season 01/Dizi Adı (Yıl) S01E01.strm`
+- Canlı TV: seçilen kategorilerdeki kanallar Jellyfin'in **Canlı TV** bölümüne "Xtream" adlı tuner olarak eklenir; yayın akışı (EPG) yalnızca bu kanallara süzülerek bağlanır. Canlı TV kapatılırsa tuner kaldırılır.
 - Aynı isimde bir klasör zaten varsa (kendi dosyalarınız) o içerik atlanır; mevcut dosyalarınıza dokunulmaz.
 - Xtream listesinden kalkan ya da seçimi kaldırılan kategorilere ait kısayollar silinir (ayarlardan kapatılabilir). Yalnızca eklentinin kendi oluşturduğu dosyalar silinir.
 - Sunucuya ulaşılamazsa hiçbir dosya silinmez.
