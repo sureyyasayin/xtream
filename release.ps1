@@ -7,7 +7,9 @@ param(
     [string]$Server = "sureyya@192.168.10.76",
     [string]$HostKey = "SHA256:rxfQIuLYU3j12/MivwQLmHsGEvs31VXziubNT5VoUus",
     [string]$RemoteRoot = "/home/sureyya/iptv",
-    [string]$TargetAbi = "12.4.0.0"
+    [string]$TargetAbi = "12.4.0.0",
+    # Yalnizca GitHub'a yayinla; sunucu yeni surumu depodan kendisi alsin (Jellyfin otomatik guncelleme).
+    [switch]$NoInstall
 )
 $ErrorActionPreference = 'Stop'
 $repo = $PSScriptRoot
@@ -62,6 +64,8 @@ $env:GCM_INTERACTIVE = 'always'
 git push origin main
 if ($LASTEXITCODE -ne 0) { Pop-Location; throw "git push basarisiz" }
 Pop-Location
+
+if ($NoInstall) { "Yayinlandi (yalnizca GitHub): $Version (md5 $md5)"; return }
 
 # 5) Sunucuya kur (derlenen DLL ile; zip icerigiyle aynidir) ve Jellyfin'i yeniden baslat
 $meta = @"
