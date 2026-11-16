@@ -128,16 +128,21 @@ public class XtreamSyncTask : IScheduledTask
             error ??= "Canli TV: " + ex.Message;
         }
 
-        var cleanup = complete && cfg.RemoveOrphans;
+        // Eksik veriyle temizlik yapilmaz: alinamayan kategorinin kisayollari silinmesin.
+        var cleanup = complete && run.FailedCategories == 0 && cfg.RemoveOrphans;
         if (cleanup)
         {
             RemoveOrphans(manifest, run);
         }
 
+        var failedCats = run.FailedCategories > 0
+            ? $" Alinamayan kategori: {run.FailedCategories} (sonraki senkronizasyonda yeniden denenir, bu turda silme yapilmadi)."
+            : string.Empty;
+
         var message = !complete
             ? $"HATA: {error} (hicbir dosya silinmedi).{liveText}"
             : $"Film: {run.Movies}, dizi: {run.Series}, bolum: {run.Episodes}. Yeni/guncellenen dosya: {run.Written}, silinen: {run.Deleted}, " +
-              $"mevcut klasor oldugu icin atlanan: {run.SkippedExisting}, hatali dizi: {run.FailedSeries}.{liveText}";
+              $"mevcut klasor oldugu icin atlanan: {run.SkippedExisting}, hatali dizi: {run.FailedSeries}.{failedCats}{liveText}";
 
         SaveManifest(plugin, manifest, run, complete, cleanup, message);
         _logger.LogInformation("Xtream STRM: {Message}", message);
@@ -178,7 +183,20 @@ public class XtreamSyncTask : IScheduledTask
         for (var i = 0; i < cats.Length; i++)
         {
             ct.ThrowIfCancellationRequested();
-            using var doc = await client.GetAsync("get_vod_streams", "&category_id=" + Uri.EscapeDataString(cats[i]), ct).ConfigureAwait(false);
+            JsonDocument doc;
+            try
+            {
+                doc = await client.GetAsync("get_vod_streams", "&category_id=" + Uri.EscapeDataString(cats[i]), ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Tek kategori hatasi tum senkronizasyonu durdurmaz.
+                run.FailedCategories++;
+                _logger.LogWarning("Xtream STRM: film kategorisi {Category} alinamadi: {Error}", cats[i], ex.Message);
+                continue;
+            }
+
+            using var docScope = doc;
             if (doc.RootElement.ValueKind == JsonValueKind.Array)
             {
                 foreach (var el in doc.RootElement.EnumerateArray())
@@ -229,7 +247,19 @@ public class XtreamSyncTask : IScheduledTask
         foreach (var cat in cfg.SeriesCategoryIds)
         {
             ct.ThrowIfCancellationRequested();
-            using var doc = await client.GetAsync("get_series", "&category_id=" + Uri.EscapeDataString(cat), ct).ConfigureAwait(false);
+            JsonDocument doc;
+            try
+            {
+                doc = await client.GetAsync("get_series", "&category_id=" + Uri.EscapeDataString(cat), ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                run.FailedCategories++;
+                _logger.LogWarning("Xtream STRM: dizi kategorisi {Category} alinamadi: {Error}", cat, ex.Message);
+                continue;
+            }
+
+            using var docScope = doc;
             if (doc.RootElement.ValueKind != JsonValueKind.Array)
             {
                 continue;
@@ -539,6 +569,8 @@ public class XtreamSyncTask : IScheduledTask
         public int SkippedExisting { get; set; }
 
         public int FailedSeries { get; set; }
+
+        public int FailedCategories { get; set; }
 
         /// <summary>
         /// Klasoru eklenti adina sahiplenir. Klasor zaten varsa ve eklenti acmadiysa

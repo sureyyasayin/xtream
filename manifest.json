@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "1.1.1.0",
+        "changelog": "Gecici Xtream hatalarinda (404/429/5xx) yeniden deneme; tek kategori hatasi tum senkronizasyonu durdurmaz.",
+        "targetAbi": "12.4.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/sureyyasayin/xtream/main/releases/xtream-strm_1.1.1.0.zip",
+        "checksum": "ea16e3a8cfdde1c29ad4e37b949a9ac8",
+        "timestamp": "2026-11-16T17:46:47Z"
+      },
+      {
         "version": "1.1.0.0",
         "changelog": "Canli TV: secilen Xtream canli kategorileri Jellyfin Canli TV'ye tuner olarak eklenir, yayin akisi (EPG) baglanir.",
         "targetAbi": "12.4.0.0",

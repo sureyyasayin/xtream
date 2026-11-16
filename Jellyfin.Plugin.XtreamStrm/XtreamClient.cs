@@ -52,7 +52,26 @@ public sealed class XtreamClient
         return u.TrimEnd('/');
     }
 
+    /// <summary>Gecici hatalarda (404/429/5xx, baglanti kopmasi) birkac kez yeniden dener.</summary>
     public async Task<JsonDocument> GetAsync(string? action, string? extraQuery, CancellationToken ct)
+    {
+        var delays = new[] { 2, 6, 15 };
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return await GetOnceAsync(action, extraQuery, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (attempt < delays.Length
+                                       && (ex is HttpRequestException or IOException or InvalidOperationException
+                                           || (ex is TaskCanceledException && !ct.IsCancellationRequested)))
+            {
+                await Task.Delay(TimeSpan.FromSeconds(delays[attempt]), ct).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private async Task<JsonDocument> GetOnceAsync(string? action, string? extraQuery, CancellationToken ct)
     {
         var url = $"{_base}/player_api.php?username={Uri.EscapeDataString(_user)}&password={Uri.EscapeDataString(_pass)}";
         if (!string.IsNullOrEmpty(action))
