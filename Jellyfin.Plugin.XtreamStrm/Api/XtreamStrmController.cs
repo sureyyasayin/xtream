@@ -54,6 +54,19 @@ public class XtreamStrmController : ControllerBase
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            // Bazi saglayicilar hesap sorgusunu reddeder ama listeleri verir.
+            try
+            {
+                var cats = await ReadCategories(client, "get_vod_categories", ct).ConfigureAwait(false);
+                if (cats.Count > 0)
+                {
+                    return Ok(new { ok = true, message = $"Sunucuya ulasildi ({cats.Count} film kategorisi), ancak hesap bilgisi sorgusu reddedildi: {ex.Message}" });
+                }
+            }
+            catch (Exception inner) when (inner is not OperationCanceledException)
+            {
+            }
+
             return Ok(new { ok = false, message = "Baglanti hatasi: " + ex.Message });
         }
     }

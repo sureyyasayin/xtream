@@ -52,23 +52,56 @@ public sealed class XtreamClient
         return u.TrimEnd('/');
     }
 
-    /// <summary>Gecici hatalarda (404/429/5xx, baglanti kopmasi) birkac kez yeniden dener.</summary>
+    /// <summary>
+    /// Gecici hatalarda (429/5xx, baglanti kopmasi) birkac kez yeniden dener. 4xx yanitlari
+    /// (ozellikle 404) sunucunun istegi reddettigini gosterir; israrla tekrarlamak hesabin
+    /// engellenmesine yol acabildigi icin yeniden denenmez.
+    /// </summary>
     public async Task<JsonDocument> GetAsync(string? action, string? extraQuery, CancellationToken ct)
     {
-        var delays = new[] { 2, 6, 15 };
+        var delays = new[] { 2, 6 };
         for (var attempt = 0; ; attempt++)
         {
+            // Istekler arasinda kisa bir nefes: sunucunun flood korumasini tetiklememek icin.
+            await _pace.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                var wait = _nextRequest - DateTime.UtcNow;
+                if (wait > TimeSpan.Zero)
+                {
+                    await Task.Delay(wait, ct).ConfigureAwait(false);
+                }
+
+                _nextRequest = DateTime.UtcNow.AddMilliseconds(300);
+            }
+            finally
+            {
+                _pace.Release();
+            }
+
             try
             {
                 return await GetOnceAsync(action, extraQuery, ct).ConfigureAwait(false);
             }
-            catch (Exception ex) when (attempt < delays.Length
-                                       && (ex is HttpRequestException or IOException or InvalidOperationException
-                                           || (ex is TaskCanceledException && !ct.IsCancellationRequested)))
+            catch (Exception ex) when (attempt < delays.Length && IsTransient(ex, ct))
             {
                 await Task.Delay(TimeSpan.FromSeconds(delays[attempt]), ct).ConfigureAwait(false);
             }
         }
+    }
+
+    private readonly SemaphoreSlim _pace = new(1, 1);
+    private DateTime _nextRequest = DateTime.MinValue;
+
+    private static bool IsTransient(Exception ex, CancellationToken ct)
+    {
+        if (ex is HttpRequestException http)
+        {
+            var code = (int?)http.StatusCode;
+            return code is null or 429 or >= 500;
+        }
+
+        return ex is IOException || (ex is TaskCanceledException && !ct.IsCancellationRequested);
     }
 
     private async Task<JsonDocument> GetOnceAsync(string? action, string? extraQuery, CancellationToken ct)
@@ -89,7 +122,7 @@ public sealed class XtreamClient
         if (!resp.IsSuccessStatusCode)
         {
             // URL sifre icerdigi icin mesajda yalnizca durum kodu verilir.
-            throw new HttpRequestException($"Xtream sunucusu HTTP {(int)resp.StatusCode} dondurdu ({action ?? "login"}).");
+            throw new HttpRequestException($"Xtream sunucusu HTTP {(int)resp.StatusCode} dondurdu ({action ?? "login"}).", null, resp.StatusCode);
         }
 
         await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);

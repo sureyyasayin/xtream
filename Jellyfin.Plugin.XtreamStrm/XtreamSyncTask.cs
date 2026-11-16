@@ -136,7 +136,7 @@ public class XtreamSyncTask : IScheduledTask
         }
 
         var failedCats = run.FailedCategories > 0
-            ? $" Alinamayan kategori: {run.FailedCategories} (sonraki senkronizasyonda yeniden denenir, bu turda silme yapilmadi)."
+            ? $" Alinamayan kategori: {run.FailedCategories} (Xtream sunucusu bu istekleri reddetti; hesabiniz bu icerigi kapsamiyor ya da gecici olarak engellenmis olabilir. Sonraki senkronizasyonda yeniden denenir, bu turda silme yapilmadi)."
             : string.Empty;
 
         var message = !complete
@@ -244,9 +244,11 @@ public class XtreamSyncTask : IScheduledTask
     private async Task SyncSeriesAsync(XtreamClient client, PluginConfiguration cfg, RunState run, IProgress<double> progress, CancellationToken ct)
     {
         var items = new Dictionary<string, SeriesItem>();
+        var catIndex = 0;
         foreach (var cat in cfg.SeriesCategoryIds)
         {
             ct.ThrowIfCancellationRequested();
+            progress.Report(30 + (5.0 * catIndex++ / cfg.SeriesCategoryIds.Length));
             JsonDocument doc;
             try
             {
@@ -285,7 +287,7 @@ public class XtreamSyncTask : IScheduledTask
 
         var done = 0;
         var gate = run.Gate;
-        var options = new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct };
+        var options = new ParallelOptions { MaxDegreeOfParallelism = 2, CancellationToken = ct };
 
         await Parallel.ForEachAsync(items.Values, options, async (item, token) =>
         {
@@ -388,7 +390,7 @@ public class XtreamSyncTask : IScheduledTask
             var n = Interlocked.Increment(ref done);
             if (n % 10 == 0)
             {
-                progress.Report(30 + (65.0 * n / items.Count));
+                progress.Report(35 + (60.0 * n / items.Count));
             }
         }).ConfigureAwait(false);
     }

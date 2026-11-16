@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "1.1.2.0",
+        "changelog": "404 yanitlarinda bekleyip yeniden denemez, istekleri seyrek gonderir; dizi asamasinda ilerleme gosterir; baglanti testi hesap sorgusu reddedilse de calisir.",
+        "targetAbi": "12.4.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/sureyyasayin/xtream/main/releases/xtream-strm_1.1.2.0.zip",
+        "checksum": "abe8a56b6855ab6102dc17671680322e",
+        "timestamp": "2026-11-16T19:05:36Z"
+      },
+      {
         "version": "1.1.1.0",
         "changelog": "Gecici Xtream hatalarinda (404/429/5xx) yeniden deneme; tek kategori hatasi tum senkronizasyonu durdurmaz.",
         "targetAbi": "12.4.0.0",
