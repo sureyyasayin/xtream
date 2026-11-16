@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8">
+    <title>Xtream STRM</title>
+</head>
+<body>
+<div id="XtreamStrmConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox">
+    <div data-role="content">
+        <div class="content-primary">
+            <form id="XtreamStrmConfigForm">
+                <h2 class="sectionTitle">Xtream STRM</h2>
+                <p>Xtream hesabınızdaki film ve diziler, seçtiğiniz kategorilerden <b>.strm</b> kısayolları olarak medya klasörlerine yazılır. Dosyalar indirilmez; oynatınca doğrudan Xtream sunucusundan akar.</p>
+
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="xsBaseUrl">Xtream adresi</label>
+                    <input id="xsBaseUrl" type="text" is="emby-input" placeholder="http://sunucu.com:8080" />
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="xsUsername">Kullanıcı adı</label>
+                    <input id="xsUsername" type="text" is="emby-input" autocomplete="off" />
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="xsPassword">Şifre</label>
+                    <input id="xsPassword" type="password" is="emby-input" autocomplete="new-password" />
+                </div>
+                <div>
+                    <button is="emby-button" type="button" id="xsTest" class="raised"><span>Kaydet ve bağlantıyı test et</span></button>
+                    <button is="emby-button" type="button" id="xsLoadCats" class="raised"><span>Kategorileri getir</span></button>
+                </div>
+                <div id="xsTestResult" class="fieldDescription" style="margin:.8em 0;"></div>
+
+                <h3>Klasörler</h3>
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="xsMoviesPath">Film klasörü</label>
+                    <input id="xsMoviesPath" type="text" is="emby-input" />
+                    <div class="fieldDescription">Jellyfin container içindeki yol. Film kütüphanenizin klasörü olmalı.</div>
+                </div>
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="xsSeriesPath">Dizi klasörü</label>
+                    <input id="xsSeriesPath" type="text" is="emby-input" />
+                </div>
+
+                <h3>Filmler</h3>
+                <label class="checkboxContainer">
+                    <input id="xsSyncMovies" type="checkbox" is="emby-checkbox" />
+                    <span>Filmleri senkronize et</span>
+                </label>
+                <div>
+                    <button is="emby-button" type="button" class="xsAll" data-target="xsMovieCats" data-on="1"><span>Tümünü seç</span></button>
+                    <button is="emby-button" type="button" class="xsAll" data-target="xsMovieCats" data-on="0"><span>Hiçbirini seçme</span></button>
+                </div>
+                <div id="xsMovieCats" style="max-height:22em;overflow-y:auto;border:1px solid rgba(128,128,128,.4);border-radius:.3em;padding:.5em 1em;margin:.5em 0 1.5em;"></div>
+
+                <h3>Diziler</h3>
+                <label class="checkboxContainer">
+                    <input id="xsSyncSeries" type="checkbox" is="emby-checkbox" />
+                    <span>Dizileri senkronize et</span>
+                </label>
+                <div>
+                    <button is="emby-button" type="button" class="xsAll" data-target="xsSeriesCats" data-on="1"><span>Tümünü seç</span></button>
+                    <button is="emby-button" type="button" class="xsAll" data-target="xsSeriesCats" data-on="0"><span>Hiçbirini seçme</span></button>
+                </div>
+                <div id="xsSeriesCats" style="max-height:22em;overflow-y:auto;border:1px solid rgba(128,128,128,.4);border-radius:.3em;padding:.5em 1em;margin:.5em 0 1.5em;"></div>
+
+                <h3>Seçenekler</h3>
+                <label class="checkboxContainer">
+                    <input id="xsRemoveOrphans" type="checkbox" is="emby-checkbox" />
+                    <span>Xtream listesinden kalkan (veya seçimi kaldırılan) içeriğin kısayollarını sil</span>
+                </label>
+                <label class="checkboxContainer">
+                    <input id="xsStripPrefixes" type="checkbox" is="emby-checkbox" />
+                    <span>İsimlerdeki "TR: ", "[4K] " gibi ön ekleri temizle</span>
+                </label>
+                <label class="checkboxContainer">
+                    <input id="xsScan" type="checkbox" is="emby-checkbox" />
+                    <span>Senkronizasyon bitince kütüphaneyi tara</span>
+                </label>
+                <div class="fieldDescription" style="margin-bottom:1.5em;">Aynı isimde bir klasör zaten varsa (kendi indirdiğiniz film/dizi) o içerik atlanır; mevcut dosyalarınıza dokunulmaz. Senkronizasyon her gece 04:00'te otomatik çalışır (Zamanlanmış Görevler'den değiştirilebilir).</div>
+
+                <div>
+                    <button is="emby-button" type="submit" class="raised button-submit block"><span>Kaydet</span></button>
+                    <button is="emby-button" type="button" id="xsSync" class="raised block"><span>Kaydet ve şimdi senkronize et</span></button>
+                </div>
+                <div id="xsStatus" class="fieldDescription" style="margin-top:1em;"></div>
+            </form>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            var pluginId = '7b1f6c3e-52a4-4d0e-9a65-3c8e0f4d2b71';
+            var selected = { xsMovieCats: [], xsSeriesCats: [] };
+
+            function $(page, sel) { return page.querySelector(sel); }
+
+            function api(path, method) {
+                return ApiClient.fetch({ url: ApiClient.getUrl(path), type: method || 'GET', dataType: method === 'POST' ? undefined : 'json' });
+            }
+
+            function checkedIds(page, boxId) {
+                var boxes = page.querySelectorAll('#' + boxId + ' input[type=checkbox]');
+                if (!boxes.length) { return selected[boxId]; } // liste yüklenmediyse kayıtlı seçim korunur
+                var ids = [];
+                boxes.forEach(function (b) { if (b.checked) { ids.push(b.getAttribute('data-id')); } });
+                return ids;
+            }
+
+            function renderCats(page, boxId, cats) {
+                var box = $(page, '#' + boxId);
+                box.innerHTML = '';
+                if (!cats.length) { box.textContent = 'Kategori bulunamadı.'; return; }
+                var chosen = selected[boxId];
+                cats.forEach(function (c) {
+                    var label = document.createElement('label');
+                    label.style.display = 'block';
+                    label.style.padding = '.25em 0';
+                    var cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.setAttribute('data-id', c.id);
+                    cb.checked = chosen.indexOf(String(c.id)) !== -1;
+                    cb.style.marginRight = '.6em';
+                    label.appendChild(cb);
+                    label.appendChild(document.createTextNode(c.name));
+                    box.appendChild(label);
+                });
+            }
+
+            function placeholder(page) {
+                ['xsMovieCats', 'xsSeriesCats'].forEach(function (id) {
+                    $(page, '#' + id).textContent = selected[id].length
+                        ? selected[id].length + ' kategori seçili. Listeyi görmek için "Kategorileri getir"e basın.'
+                        : 'Henüz kategori seçilmedi. "Kategorileri getir"e basın. Seçim yapılmazsa hiçbir içerik alınmaz.';
+                });
+            }
+
+            function load(page) {
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(pluginId).then(function (c) {
+                    $(page, '#xsBaseUrl').value = c.BaseUrl || '';
+                    $(page, '#xsUsername').value = c.Username || '';
+                    $(page, '#xsPassword').value = c.Password || '';
+                    $(page, '#xsMoviesPath').value = c.MoviesPath || '';
+                    $(page, '#xsSeriesPath').value = c.SeriesPath || '';
+                    $(page, '#xsSyncMovies').checked = !!c.SyncMovies;
+                    $(page, '#xsSyncSeries').checked = !!c.SyncSeries;
+                    $(page, '#xsRemoveOrphans').checked = !!c.RemoveOrphans;
+                    $(page, '#xsStripPrefixes').checked = !!c.StripPrefixes;
+                    $(page, '#xsScan').checked = !!c.ScanLibraryAfterSync;
+                    selected.xsMovieCats = (c.MovieCategoryIds || []).map(String);
+                    selected.xsSeriesCats = (c.SeriesCategoryIds || []).map(String);
+                    placeholder(page);
+                    Dashboard.hideLoadingMsg();
+                    if (c.BaseUrl && c.Username) { loadCats(page, true); }
+                });
+                showStatus(page);
+            }
+
+            function save(page, quiet) {
+                return ApiClient.getPluginConfiguration(pluginId).then(function (c) {
+                    c.BaseUrl = $(page, '#xsBaseUrl').value.trim();
+                    c.Username = $(page, '#xsUsername').value.trim();
+                    c.Password = $(page, '#xsPassword').value;
+                    c.MoviesPath = $(page, '#xsMoviesPath').value.trim() || '/data/movies';
+                    c.SeriesPath = $(page, '#xsSeriesPath').value.trim() || '/data/tvshows';
+                    c.SyncMovies = $(page, '#xsSyncMovies').checked;
+                    c.SyncSeries = $(page, '#xsSyncSeries').checked;
+                    c.RemoveOrphans = $(page, '#xsRemoveOrphans').checked;
+                    c.StripPrefixes = $(page, '#xsStripPrefixes').checked;
+                    c.ScanLibraryAfterSync = $(page, '#xsScan').checked;
+                    c.MovieCategoryIds = selected.xsMovieCats = checkedIds(page, 'xsMovieCats');
+                    c.SeriesCategoryIds = selected.xsSeriesCats = checkedIds(page, 'xsSeriesCats');
+                    return ApiClient.updatePluginConfiguration(pluginId, c).then(function (r) {
+                        if (!quiet) { Dashboard.processPluginConfigurationUpdateResult(r); }
+                    });
+                });
+            }
+
+            function loadCats(page, silent) {
+                var out = $(page, '#xsTestResult');
+                if (!silent) { out.textContent = 'Kategoriler alınıyor...'; }
+                return api('XtreamStrm/Categories').then(function (r) {
+                    if (!r.ok) { if (!silent) { out.textContent = r.message; } return; }
+                    renderCats(page, 'xsMovieCats', r.movies);
+                    renderCats(page, 'xsSeriesCats', r.series);
+                    if (!silent) { out.textContent = r.movies.length + ' film kategorisi, ' + r.series.length + ' dizi kategorisi bulundu.'; }
+                }).catch(function () { if (!silent) { out.textContent = 'Kategoriler alınamadı.'; } });
+            }
+
+            function showStatus(page) {
+                api('XtreamStrm/Status').then(function (s) {
+                    var el = $(page, '#xsStatus');
+                    if (!s.lastRun) { el.textContent = 'Henüz senkronizasyon yapılmadı.'; return; }
+                    el.textContent = 'Son senkronizasyon: ' + new Date(s.lastRun).toLocaleString() + ' — ' + s.message + ' (toplam ' + s.files + ' kısayol)';
+                }).catch(function () { });
+            }
+
+            var page = document.querySelector('#XtreamStrmConfigPage');
+
+            page.addEventListener('pageshow', function () { load(page); });
+
+            $(page, '#XtreamStrmConfigForm').addEventListener('submit', function (e) {
+                e.preventDefault();
+                Dashboard.showLoadingMsg();
+                save(page, false);
+                return false;
+            });
+
+            $(page, '#xsTest').addEventListener('click', function () {
+                var out = $(page, '#xsTestResult');
+                out.textContent = 'Bağlanılıyor...';
+                save(page, true).then(function () { return api('XtreamStrm/Test'); }).then(function (r) {
+                    out.textContent = (r.ok ? '✔ ' : '✖ ') + r.message;
+                    if (r.ok) { loadCats(page, true); }
+                }).catch(function () { out.textContent = '✖ İstek başarısız.'; });
+            });
+
+            $(page, '#xsLoadCats').addEventListener('click', function () {
+                save(page, true).then(function () { loadCats(page, false); });
+            });
+
+            $(page, '#xsSync').addEventListener('click', function () {
+                save(page, true).then(function () { return api('XtreamStrm/Sync', 'POST'); }).then(function () {
+                    $(page, '#xsStatus').textContent = 'Senkronizasyon başlatıldı. İlerlemeyi Kontrol Paneli → Zamanlanmış Görevler altında görebilirsiniz.';
+                }).catch(function () { $(page, '#xsStatus').textContent = 'Senkronizasyon başlatılamadı.'; });
+            });
+
+            page.querySelectorAll('.xsAll').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var on = btn.getAttribute('data-on') === '1';
+                    page.querySelectorAll('#' + btn.getAttribute('data-target') + ' input[type=checkbox]').forEach(function (b) { b.checked = on; });
+                });
+            });
+        })();
+    </script>
+</div>
+</body>
+</html>
