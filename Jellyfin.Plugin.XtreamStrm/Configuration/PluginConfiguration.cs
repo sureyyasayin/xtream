@@ -43,6 +43,12 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>Ayni anda acilabilecek yayin sayisi (0 = sinirsiz).</summary>
     public int LiveTunerCount { get; set; }
 
+    /// <summary>Web istemcisine (LG webOS, tarayici) kumandayla kanal degistirme ekle.</summary>
+    public bool LiveRemoteControl { get; set; } = true;
+
+    /// <summary>Kanal degistirmede CH+/CH- disinda Yukari/Asagi oklari da kullanilsin.</summary>
+    public bool LiveRemoteArrows { get; set; } = true;
+
     /// <summary>
     /// Xtream istekleri arasindaki bekleme (ms). Cogu saglayici dakikada ~30 istekten
     /// sonra gecici olarak 404 dondurur; 2500 ms dakikada 24 istek eder.

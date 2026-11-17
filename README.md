@@ -29,6 +29,7 @@ Senkronizasyon her gece 04:00'te kendiliğinden tekrarlanır; saat Zamanlanmış
 - Film: `Film Adı (Yıl) [tmdbid-123]/Film Adı (Yıl).strm`
 - Dizi: `Dizi Adı (Yıl)/Season 01/Dizi Adı (Yıl) S01E01.strm`
 - Canlı TV: seçilen kategorilerdeki kanallar Jellyfin'in **Canlı TV** bölümüne "Xtream" adlı tuner olarak eklenir; yayın akışı (EPG) yalnızca bu kanallara süzülerek bağlanır. Canlı TV kapatılırsa tuner kaldırılır.
+- Kumandayla kanal değiştirme (LG webOS Jellyfin uygulaması ve tarayıcı): canlı kanal izlerken **CH+ / CH-** ve alt çubuk kapalıyken **Yukarı / Aşağı** sonraki / önceki kanala geçer; **rakam** tuşları kanal numarasına gider; **Yeşil** tuş bir önceki kanala döner. Art arda basınca ekranda kanal adı görünür, tuş bırakılınca son seçilen kanal açılır. Eklenti bunun için Jellyfin web arayüzüne küçük bir betik ekler (Jellyfin dosyalarına dokunmaz); ayarlardan kapatılabilir. Samsung (Tizen) uygulaması arayüzü kendi içinde taşıdığı için orada çalışmaz.
 - Aynı isimde bir klasör zaten varsa (kendi dosyalarınız) o içerik atlanır; mevcut dosyalarınıza dokunulmaz.
 - Xtream listesinden kalkan ya da seçimi kaldırılan kategorilere ait kısayollar silinir (ayarlardan kapatılabilir). Yalnızca eklentinin kendi oluşturduğu dosyalar silinir.
 - Sunucuya ulaşılamazsa hiçbir dosya silinmez.

@@ -89,6 +89,16 @@
                     <input id="xsLiveTunerCount" type="number" min="0" is="emby-input" />
                     <div class="fieldDescription" style="margin-bottom:1.5em;">Xtream hesabınızın bağlantı sınırını girin (0 = sınırsız). Kanallar senkronizasyondan sonra Jellyfin'in <b>Canlı TV</b> bölümünde görünür.</div>
                 </div>
+                <label class="checkboxContainer">
+                    <input id="xsLiveRemote" type="checkbox" is="emby-checkbox" />
+                    <span>Kumandayla kanal değiştirme (LG webOS uygulaması ve tarayıcı)</span>
+                </label>
+                <div class="fieldDescription">Canlı kanal izlerken CH+ / CH- sonraki / önceki kanala geçer, rakam tuşları kanal numarasına gider, Yeşil tuş bir önceki kanala döner. Değişiklikten sonra TV'deki Jellyfin uygulamasını kapatıp açın.</div>
+                <label class="checkboxContainer">
+                    <input id="xsLiveRemoteArrows" type="checkbox" is="emby-checkbox" />
+                    <span>Yukarı / Aşağı oklarıyla da kanal değiştir (alt çubuk kapalıyken)</span>
+                </label>
+                <div class="fieldDescription" style="margin-bottom:1.5em;">Kapalıyken Yukarı / Aşağı Jellyfin'deki gibi sesi değiştirir.</div>
 
                 <h3>Seçenekler</h3>
                 <div class="inputContainer">
@@ -187,6 +197,8 @@
                     $(page, '#xsLiveUseEpg').checked = !!c.LiveUseEpg;
                     $(page, '#xsLiveFormat').value = c.LiveFormat === 'm3u8' ? 'm3u8' : 'ts';
                     $(page, '#xsLiveTunerCount').value = c.LiveTunerCount || 0;
+                    $(page, '#xsLiveRemote').checked = c.LiveRemoteControl !== false;
+                    $(page, '#xsLiveRemoteArrows').checked = c.LiveRemoteArrows !== false;
                     placeholder(page);
                     Dashboard.hideLoadingMsg();
                     if (c.BaseUrl && c.Username) { loadCats(page, true); }
@@ -214,6 +226,8 @@
                     c.LiveUseEpg = $(page, '#xsLiveUseEpg').checked;
                     c.LiveFormat = $(page, '#xsLiveFormat').value;
                     c.LiveTunerCount = parseInt($(page, '#xsLiveTunerCount').value, 10) || 0;
+                    c.LiveRemoteControl = $(page, '#xsLiveRemote').checked;
+                    c.LiveRemoteArrows = $(page, '#xsLiveRemoteArrows').checked;
                     return ApiClient.updatePluginConfiguration(pluginId, c).then(function (r) {
                         if (!quiet) { Dashboard.processPluginConfigurationUpdateResult(r); }
                     });

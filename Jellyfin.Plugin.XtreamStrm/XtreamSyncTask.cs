@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using Jellyfin.Plugin.XtreamStrm.Configuration;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 
@@ -22,18 +23,21 @@ public class XtreamSyncTask : IScheduledTask
     private readonly ILogger<XtreamSyncTask> _logger;
     private readonly IServerConfigurationManager _configurationManager;
     private readonly ITaskManager _taskManager;
+    private readonly ITunerHostManager _tunerHostManager;
 
     public XtreamSyncTask(
         IHttpClientFactory httpClientFactory,
         ILibraryManager libraryManager,
         IServerConfigurationManager configurationManager,
         ITaskManager taskManager,
+        ITunerHostManager tunerHostManager,
         ILogger<XtreamSyncTask> logger)
     {
         _httpClientFactory = httpClientFactory;
         _libraryManager = libraryManager;
         _configurationManager = configurationManager;
         _taskManager = taskManager;
+        _tunerHostManager = tunerHostManager;
         _logger = logger;
     }
 
@@ -113,6 +117,15 @@ public class XtreamSyncTask : IScheduledTask
             var live = new LiveTvSync(_configurationManager, _logger);
             var (channels, liveChanged) = await live.RunAsync(client, cfg, plugin, cancellationToken).ConfigureAwait(false);
             liveText = $" Canli TV kanali: {channels}.";
+            if (channels > 0)
+            {
+                var removed = await new StaleChannelCleaner(_libraryManager, _tunerHostManager, _logger).RunAsync(cancellationToken).ConfigureAwait(false);
+                if (removed > 0)
+                {
+                    liveText += $" Kaldirilan eski kanal: {removed}.";
+                }
+            }
+
             if (liveChanged)
             {
                 QueueGuideRefresh();

@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "1.4.0.0",
+        "changelog": "Kumandayla kanal degistirme (LG webOS / tarayici): CH+/CH- ve Yukari/Asagi ile kanal gecisi, rakamla kanal secimi, Yesil ile onceki kanal. Tek baglantili hesapta kanal gecisi (cihazin onceki yayini kapatilir). Hesap/adres degisince veritabaninda kalan eski kanallar temizlenir. Kanallara sira numarasi.",
+        "targetAbi": "12.4.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/sureyyasayin/xtream/main/releases/xtream-strm_1.4.0.0.zip",
+        "checksum": "d02081a861ed43287ed6623882960cbd",
+        "timestamp": "2026-11-17T14:44:45Z"
+      },
+      {
         "version": "1.3.0.0",
         "changelog": "Toplu istek: filmler, diziler ve kanallar birkac istekle alinir (diziler M3U listesinden); saglayicinin hiz sinirina takilmaz. Tum istekler ayni bekleme/yeniden deneme mantigindan gecer.",
         "targetAbi": "12.4.0.0",

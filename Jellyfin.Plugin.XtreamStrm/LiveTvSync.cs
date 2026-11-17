@@ -14,7 +14,7 @@ namespace Jellyfin.Plugin.XtreamStrm;
 /// </summary>
 public class LiveTvSync
 {
-    private const string TunerId = "7b1f6c3e52a44d0e9a653c8e0f4d2b71";
+    public const string TunerId = "7b1f6c3e52a44d0e9a653c8e0f4d2b71";
     private const string ListingsId = "7b1f6c3e52a44d0e9a653c8e0f4d2b72";
 
     private readonly IConfigurationManager _config;
@@ -90,7 +90,8 @@ public class LiveTvSync
                 var epg = XtreamClient.Str(el, "epg_channel_id");
                 var icon = XtreamClient.Str(el, "stream_icon");
 
-                sb.Append("#EXTINF:-1");
+                // Sira numarasi: kumandada rakamla kanal secimi ve sabit kanal sirasi icin.
+                sb.Append("#EXTINF:-1 tvg-chno=\"").Append(count + 1).Append('"');
                 if (epg != null)
                 {
                     epgIds.Add(epg);
