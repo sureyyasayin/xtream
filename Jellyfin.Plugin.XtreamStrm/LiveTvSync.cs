@@ -62,18 +62,24 @@ public class LiveTvSync
         var epgIds = new HashSet<string>(StringComparer.Ordinal);
         var count = 0;
 
-        foreach (var cat in cfg.LiveCategoryIds)
+        // Tum kanallar TEK istekle alinir (kategori basina istek hiz sinirina takilir).
+        var selectedCats = new HashSet<string>(cfg.LiveCategoryIds, StringComparer.Ordinal);
+        using (var doc = await client.GetAsync("get_live_streams", null, ct).ConfigureAwait(false))
         {
-            ct.ThrowIfCancellationRequested();
-            using var doc = await client.GetAsync("get_live_streams", "&category_id=" + Uri.EscapeDataString(cat), ct).ConfigureAwait(false);
             if (doc.RootElement.ValueKind != JsonValueKind.Array)
             {
-                continue;
+                throw new InvalidOperationException("Kanal listesi beklenen bicimde degil.");
             }
 
-            var group = catNames.TryGetValue(cat, out var g) ? g : cat;
             foreach (var el in doc.RootElement.EnumerateArray())
             {
+                var cat = XtreamClient.Str(el, "category_id");
+                if (cat == null || !selectedCats.Contains(cat))
+                {
+                    continue;
+                }
+
+                var group = catNames.TryGetValue(cat, out var g) ? g : cat;
                 var id = XtreamClient.Str(el, "stream_id");
                 var name = XtreamClient.Str(el, "name");
                 if (id == null || name == null || !seen.Add(id))

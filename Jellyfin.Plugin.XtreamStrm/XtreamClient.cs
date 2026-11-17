@@ -59,12 +59,12 @@ public sealed class XtreamClient
     }
 
     /// <summary>
-    /// Istekleri sunucunun hiz sinirina gore araliklarla gonderir. Bu tur saglayicilar
-    /// dakikada ~30 istekten sonra bir sure HTTP 404 dondurur; 404/429 gelince bekleyip
-    /// bir kez yeniden dener. Ust uste 5 istek basarisiz olursa sunucuyu daha fazla
-    /// yoklamamak icin kalan istekler gonderilmeden reddedilir.
+    /// Tum istekler buradan gecer: sunucunun hiz sinirina gore araliklarla gonderilir.
+    /// Bu tur saglayicilar dakikada ~30 istekten sonra bir sure bos HTTP 404 dondurur;
+    /// 404/429 gelince 60 sn, sonra 150 sn bekleyip yeniden denenir. Ust uste 5 istek
+    /// basarisiz olursa sunucuyu daha fazla yoklamamak icin kalan istekler gonderilmez.
     /// </summary>
-    public async Task<JsonDocument> GetAsync(string? action, string? extraQuery, CancellationToken ct)
+    private async Task<T> SendAsync<T>(Func<Task<T>> once, CancellationToken ct)
     {
         if (Blocked)
         {
@@ -91,9 +91,9 @@ public sealed class XtreamClient
 
             try
             {
-                var doc = await GetOnceAsync(action, extraQuery, ct).ConfigureAwait(false);
+                var result = await once().ConfigureAwait(false);
                 Interlocked.Exchange(ref _consecutiveFailures, 0);
-                return doc;
+                return result;
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
@@ -136,7 +136,7 @@ public sealed class XtreamClient
             if (code is 404 or 429)
             {
                 // Hiz siniri: ayar sayfasindan yapilan anlik sorgularda bekletme.
-                return !_interactive && attempt == 0 ? TimeSpan.FromSeconds(45) : null;
+                return _interactive ? null : attempt switch { 0 => TimeSpan.FromSeconds(60), 1 => TimeSpan.FromSeconds(150), _ => null };
             }
 
             if (code < 500)
@@ -152,27 +152,17 @@ public sealed class XtreamClient
         return attempt switch { 0 => TimeSpan.FromSeconds(3), 1 => TimeSpan.FromSeconds(10), _ => null };
     }
 
+    private string Credentials => $"username={Uri.EscapeDataString(_user)}&password={Uri.EscapeDataString(_pass)}";
+
+    /// <summary>player_api.php sorgusu; yanit JSON olarak dondurulur.</summary>
+    public Task<JsonDocument> GetAsync(string? action, string? extraQuery, CancellationToken ct) =>
+        SendAsync(() => GetOnceAsync(action, extraQuery, ct), ct);
+
     private async Task<JsonDocument> GetOnceAsync(string? action, string? extraQuery, CancellationToken ct)
     {
-        var url = $"{_base}/player_api.php?username={Uri.EscapeDataString(_user)}&password={Uri.EscapeDataString(_pass)}";
-        if (!string.IsNullOrEmpty(action))
-        {
-            url += "&action=" + action;
-        }
-
-        url += extraQuery ?? string.Empty;
-
-        using var req = new HttpRequestMessage(HttpMethod.Get, url);
-        req.Headers.TryAddWithoutValidation("User-Agent", "VLC/3.0.20 LibVLC/3.0.20");
-        req.Headers.TryAddWithoutValidation("Accept", "application/json, */*");
-
-        using var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-        if (!resp.IsSuccessStatusCode)
-        {
-            // URL sifre icerdigi icin mesajda yalnizca durum kodu verilir.
-            throw new HttpRequestException($"Xtream sunucusu HTTP {(int)resp.StatusCode} dondurdu ({action ?? "login"}).", null, resp.StatusCode);
-        }
-
+        var label = action ?? "login";
+        var query = (string.IsNullOrEmpty(action) ? string.Empty : "&action=" + action) + (extraQuery ?? string.Empty);
+        using var resp = await OpenOnceAsync("/player_api.php", query, label, "application/json, */*", ct).ConfigureAwait(false);
         await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
         try
         {
@@ -180,26 +170,39 @@ public sealed class XtreamClient
         }
         catch (JsonException)
         {
-            throw new InvalidOperationException($"Xtream sunucusu gecerli JSON dondurmedi ({action ?? "login"}).");
+            throw new InvalidOperationException($"Xtream sunucusu gecerli JSON dondurmedi ({label}).");
         }
     }
 
-    /// <summary>Xtream yayin akisini (XMLTV) akis olarak acar. Yanit cagiran tarafindan kapatilir.</summary>
-    public async Task<HttpResponseMessage> OpenXmltvAsync(CancellationToken ct)
+    /// <summary>Yaniti akis olarak acar; cagiran taraf kapatir.</summary>
+    private async Task<HttpResponseMessage> OpenOnceAsync(string path, string query, string label, string accept, CancellationToken ct)
     {
-        var url = $"{_base}/xmltv.php?username={Uri.EscapeDataString(_user)}&password={Uri.EscapeDataString(_pass)}";
-        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+        using var req = new HttpRequestMessage(HttpMethod.Get, $"{_base}{path}?{Credentials}{query}");
         req.Headers.TryAddWithoutValidation("User-Agent", UserAgent);
+        req.Headers.TryAddWithoutValidation("Accept", accept);
+
         var resp = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode)
         {
-            var code = (int)resp.StatusCode;
+            // URL sifre icerdigi icin mesajda yalnizca durum kodu verilir.
+            var status = resp.StatusCode;
             resp.Dispose();
-            throw new HttpRequestException($"Xtream sunucusu HTTP {code} dondurdu (xmltv).");
+            throw new HttpRequestException($"Xtream sunucusu HTTP {(int)status} dondurdu ({label}).", null, status);
         }
 
         return resp;
     }
+
+    private Task<HttpResponseMessage> OpenRawAsync(string path, string query, string label, CancellationToken ct) =>
+        SendAsync(() => OpenOnceAsync(path, query, label, "*/*", ct), ct);
+
+    /// <summary>Xtream yayin akisini (XMLTV) akis olarak acar. Yanit cagiran tarafindan kapatilir.</summary>
+    public Task<HttpResponseMessage> OpenXmltvAsync(CancellationToken ct) =>
+        OpenRawAsync("/xmltv.php", string.Empty, "xmltv", ct);
+
+    /// <summary>Tum icerigi (kanal, film, dizi bolumleri) iceren M3U listesini akis olarak acar.</summary>
+    public Task<HttpResponseMessage> OpenM3uAsync(CancellationToken ct) =>
+        OpenRawAsync("/get.php", "&type=m3u_plus&output=ts", "m3u", ct);
 
     public const string UserAgent = "VLC/3.0.20 LibVLC/3.0.20";
 
