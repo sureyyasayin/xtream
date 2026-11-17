@@ -139,6 +139,11 @@ public class XtreamSyncTask : IScheduledTask
             ? $" Alinamayan kategori: {run.FailedCategories} (Xtream sunucusu bu istekleri reddetti; hesabiniz bu icerigi kapsamiyor ya da gecici olarak engellenmis olabilir. Sonraki senkronizasyonda yeniden denenir, bu turda silme yapilmadi)."
             : string.Empty;
 
+        if (client.Blocked)
+        {
+            failedCats += " Sunucu ust uste istekleri reddettigi icin bu tur erken durduruldu; bir sure sonra yeniden deneyin.";
+        }
+
         var message = !complete
             ? $"HATA: {error} (hicbir dosya silinmedi).{liveText}"
             : $"Film: {run.Movies}, dizi: {run.Series}, bolum: {run.Episodes}. Yeni/guncellenen dosya: {run.Written}, silinen: {run.Deleted}, " +
@@ -392,6 +397,16 @@ public class XtreamSyncTask : IScheduledTask
             {
                 progress.Report(35 + (60.0 * n / items.Count));
             }
+
+            // Ilk senkronizasyon saatler surebilir: yarida kesilirse kaldigi yerden devam
+            // edebilmesi icin ara kayit alinir (calisan turun durumu degistirilmez).
+            if (n % 100 == 0)
+            {
+                lock (gate)
+                {
+                    SaveSnapshot(run, $"Senkronizasyon suruyor: {n}/{items.Count} dizi islendi.");
+                }
+            }
         }).ConfigureAwait(false);
     }
 
@@ -484,6 +499,37 @@ public class XtreamSyncTask : IScheduledTask
                 _logger.LogWarning("Xtream STRM: {Dir} klasoru silinemedi: {Error}", dir, ex.Message);
             }
         }
+    }
+
+    private static void SaveSnapshot(RunState run, string message)
+    {
+        var old = run.Manifest;
+        var files = new HashSet<string>(run.Desired, StringComparer.Ordinal);
+        files.UnionWith(old.Files);
+        var dirs = new HashSet<string>(run.Claimed, StringComparer.Ordinal);
+        dirs.UnionWith(old.Dirs);
+
+        var seriesFiles = new Dictionary<string, List<string>>(old.SeriesFiles);
+        foreach (var kv in run.NewSeriesFiles)
+        {
+            seriesFiles[kv.Key] = kv.Value;
+        }
+
+        var stamps = new Dictionary<string, string>(old.SeriesStamp);
+        foreach (var kv in run.NewSeriesStamp)
+        {
+            stamps[kv.Key] = kv.Value;
+        }
+
+        new Manifest
+        {
+            Files = files.ToList(),
+            Dirs = dirs.ToList(),
+            SeriesFiles = seriesFiles,
+            SeriesStamp = stamps,
+            LastRun = DateTime.UtcNow,
+            LastMessage = message
+        }.Save(Plugin.Instance!.ManifestPath);
     }
 
     private static void SaveManifest(Plugin plugin, Manifest manifest, RunState run, bool complete, bool cleaned, string message)

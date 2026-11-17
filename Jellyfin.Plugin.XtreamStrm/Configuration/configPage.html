@@ -91,6 +91,11 @@
                 </div>
 
                 <h3>Seçenekler</h3>
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="xsRequestDelay">İstekler arası bekleme (milisaniye)</label>
+                    <input id="xsRequestDelay" type="number" min="300" step="100" is="emby-input" />
+                    <div class="fieldDescription">Çoğu Xtream sağlayıcısı dakikada yaklaşık 30 istekten sonra geçici olarak yanıt vermez (HTTP 404). 2500 ms güvenli değerdir. Bu yüzden ilk dizi senkronizasyonu uzun sürer (her dizi için bir istek: 1.000 dizi ≈ 40 dakika); sonraki senkronizasyonlarda yalnızca değişen diziler sorgulanır.</div>
+                </div>
                 <label class="checkboxContainer">
                     <input id="xsRemoveOrphans" type="checkbox" is="emby-checkbox" />
                     <span>Xtream listesinden kalkan (veya seçimi kaldırılan) içeriğin kısayollarını sil</span>
@@ -174,6 +179,7 @@
                     $(page, '#xsRemoveOrphans').checked = !!c.RemoveOrphans;
                     $(page, '#xsStripPrefixes').checked = !!c.StripPrefixes;
                     $(page, '#xsScan').checked = !!c.ScanLibraryAfterSync;
+                    $(page, '#xsRequestDelay').value = c.RequestDelayMs || 2500;
                     selected.xsMovieCats = (c.MovieCategoryIds || []).map(String);
                     selected.xsSeriesCats = (c.SeriesCategoryIds || []).map(String);
                     selected.xsLiveCats = (c.LiveCategoryIds || []).map(String);
@@ -200,6 +206,7 @@
                     c.RemoveOrphans = $(page, '#xsRemoveOrphans').checked;
                     c.StripPrefixes = $(page, '#xsStripPrefixes').checked;
                     c.ScanLibraryAfterSync = $(page, '#xsScan').checked;
+                    c.RequestDelayMs = Math.max(300, parseInt($(page, '#xsRequestDelay').value, 10) || 2500);
                     c.MovieCategoryIds = selected.xsMovieCats = checkedIds(page, 'xsMovieCats');
                     c.SeriesCategoryIds = selected.xsSeriesCats = checkedIds(page, 'xsSeriesCats');
                     c.LiveCategoryIds = selected.xsLiveCats = checkedIds(page, 'xsLiveCats');

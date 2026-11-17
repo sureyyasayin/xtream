@@ -120,7 +120,7 @@ public class XtreamStrmController : ControllerBase
     {
         var http = _httpClientFactory.CreateClient();
         http.Timeout = TimeSpan.FromMinutes(2);
-        return new XtreamClient(http, Plugin.Instance!.Configuration);
+        return new XtreamClient(http, Plugin.Instance!.Configuration, interactive: true);
     }
 
     private static async Task<List<object>> ReadCategories(XtreamClient client, string action, CancellationToken ct)

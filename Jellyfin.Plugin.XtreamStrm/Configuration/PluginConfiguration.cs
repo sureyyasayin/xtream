@@ -43,6 +43,12 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>Ayni anda acilabilecek yayin sayisi (0 = sinirsiz).</summary>
     public int LiveTunerCount { get; set; }
 
+    /// <summary>
+    /// Xtream istekleri arasindaki bekleme (ms). Cogu saglayici dakikada ~30 istekten
+    /// sonra gecici olarak 404 dondurur; 2500 ms dakikada 24 istek eder.
+    /// </summary>
+    public int RequestDelayMs { get; set; } = 2500;
+
     /// <summary>Xtream listesinden kalkan icerigin .strm dosyalarini sil.</summary>
     public bool RemoveOrphans { get; set; } = true;
 

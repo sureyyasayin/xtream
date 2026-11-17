@@ -11,9 +11,15 @@ public sealed class XtreamClient
     private readonly string _user;
     private readonly string _pass;
 
-    public XtreamClient(HttpClient http, PluginConfiguration config)
+    private readonly int _delayMs;
+    private readonly bool _interactive;
+
+    /// <param name="interactive">Ayar sayfasindan yapilan anlik sorgu: kisa aralik, uzun bekleme yok.</param>
+    public XtreamClient(HttpClient http, PluginConfiguration config, bool interactive = false)
     {
         _http = http;
+        _interactive = interactive;
+        _delayMs = interactive ? 300 : Math.Clamp(config.RequestDelayMs, 300, 60000);
         _base = NormalizeBaseUrl(config.BaseUrl);
         _user = (config.Username ?? string.Empty).Trim();
         _pass = (config.Password ?? string.Empty).Trim();
@@ -53,16 +59,20 @@ public sealed class XtreamClient
     }
 
     /// <summary>
-    /// Gecici hatalarda (429/5xx, baglanti kopmasi) birkac kez yeniden dener. 4xx yanitlari
-    /// (ozellikle 404) sunucunun istegi reddettigini gosterir; israrla tekrarlamak hesabin
-    /// engellenmesine yol acabildigi icin yeniden denenmez.
+    /// Istekleri sunucunun hiz sinirina gore araliklarla gonderir. Bu tur saglayicilar
+    /// dakikada ~30 istekten sonra bir sure HTTP 404 dondurur; 404/429 gelince bekleyip
+    /// bir kez yeniden dener. Ust uste 5 istek basarisiz olursa sunucuyu daha fazla
+    /// yoklamamak icin kalan istekler gonderilmeden reddedilir.
     /// </summary>
     public async Task<JsonDocument> GetAsync(string? action, string? extraQuery, CancellationToken ct)
     {
-        var delays = new[] { 2, 6 };
+        if (Blocked)
+        {
+            throw new HttpRequestException("Xtream sunucusu istekleri engelliyor; bu tur icin durduruldu.");
+        }
+
         for (var attempt = 0; ; attempt++)
         {
-            // Istekler arasinda kisa bir nefes: sunucunun flood korumasini tetiklememek icin.
             await _pace.WaitAsync(ct).ConfigureAwait(false);
             try
             {
@@ -72,7 +82,7 @@ public sealed class XtreamClient
                     await Task.Delay(wait, ct).ConfigureAwait(false);
                 }
 
-                _nextRequest = DateTime.UtcNow.AddMilliseconds(300);
+                _nextRequest = DateTime.UtcNow.AddMilliseconds(_delayMs);
             }
             finally
             {
@@ -81,27 +91,65 @@ public sealed class XtreamClient
 
             try
             {
-                return await GetOnceAsync(action, extraQuery, ct).ConfigureAwait(false);
+                var doc = await GetOnceAsync(action, extraQuery, ct).ConfigureAwait(false);
+                Interlocked.Exchange(ref _consecutiveFailures, 0);
+                return doc;
             }
-            catch (Exception ex) when (attempt < delays.Length && IsTransient(ex, ct))
+            catch (Exception ex) when (!ct.IsCancellationRequested)
             {
-                await Task.Delay(TimeSpan.FromSeconds(delays[attempt]), ct).ConfigureAwait(false);
+                var pause = RetryPause(ex, attempt);
+                if (pause == null)
+                {
+                    Interlocked.Increment(ref _consecutiveFailures);
+                    throw;
+                }
+
+                // Bekleme tum isteklere uygulanir (paralel calisanlar da durur).
+                await _pace.WaitAsync(ct).ConfigureAwait(false);
+                try
+                {
+                    var until = DateTime.UtcNow + pause.Value;
+                    if (until > _nextRequest)
+                    {
+                        _nextRequest = until;
+                    }
+                }
+                finally
+                {
+                    _pace.Release();
+                }
             }
         }
     }
 
     private readonly SemaphoreSlim _pace = new(1, 1);
     private DateTime _nextRequest = DateTime.MinValue;
+    private int _consecutiveFailures;
 
-    private static bool IsTransient(Exception ex, CancellationToken ct)
+    /// <summary>Sunucu ust uste istekleri reddediyor; kalan istekler gonderilmez.</summary>
+    public bool Blocked => Volatile.Read(ref _consecutiveFailures) >= 5;
+
+    private TimeSpan? RetryPause(Exception ex, int attempt)
     {
-        if (ex is HttpRequestException http)
+        if (ex is HttpRequestException http && (int?)http.StatusCode is int code)
         {
-            var code = (int?)http.StatusCode;
-            return code is null or 429 or >= 500;
+            if (code is 404 or 429)
+            {
+                // Hiz siniri: ayar sayfasindan yapilan anlik sorgularda bekletme.
+                return !_interactive && attempt == 0 ? TimeSpan.FromSeconds(45) : null;
+            }
+
+            if (code < 500)
+            {
+                return null;
+            }
+        }
+        else if (ex is not (HttpRequestException or IOException or TaskCanceledException))
+        {
+            return null;
         }
 
-        return ex is IOException || (ex is TaskCanceledException && !ct.IsCancellationRequested);
+        return attempt switch { 0 => TimeSpan.FromSeconds(3), 1 => TimeSpan.FromSeconds(10), _ => null };
     }
 
     private async Task<JsonDocument> GetOnceAsync(string? action, string? extraQuery, CancellationToken ct)

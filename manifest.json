@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "1.2.0.0",
+        "changelog": "Sunucunun hiz sinirina uyum: istekler arasi ayarlanabilir bekleme (varsayilan 2,5 sn), 404 engelinde bekleyip yeniden deneme, uzun senkronizasyonda ara kayit.",
+        "targetAbi": "12.4.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/sureyyasayin/xtream/main/releases/xtream-strm_1.2.0.0.zip",
+        "checksum": "58130d7d149314c902d7b237e45da404",
+        "timestamp": "2026-11-17T05:15:18Z"
+      },
+      {
         "version": "1.1.3.0",
         "changelog": "Depo uzerinden otomatik guncelleme testi; yayin betigine -NoInstall secenegi.",
         "targetAbi": "12.4.0.0",
