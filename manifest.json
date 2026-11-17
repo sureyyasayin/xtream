@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "1.5.0.0",
+        "changelog": "Xtream Canli TV / Filmler / Diziler kutulari: Xtream kategorileri Xtream sirasiyla, ayarlardan ayri ayri acilip kapatilir; kutudan tiklaninca kutuphanedeki film/dizi karti acilir. Canli TV kanallari kategori bloklariyla numaralanir, Kirmizi/Mavi ile kategori atlanir. Sifre gizliligi: .strm dosyalarinda kullanici adi/sifre yok (imzali adres; istege bagli sunucu uzerinden aktarma); ilk senkronizasyonda dosyalar bir kez yeniden yazilir. Saglayicida bos gelen filmde ayni filmin baska kopyasi acilir. Yarida kalan indirmeler 60 sn sonra kesilir. Jellyfin 12.4 kanal kaydi duzeltmesi.",
+        "targetAbi": "12.4.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/sureyyasayin/xtream/main/releases/xtream-strm_1.5.0.0.zip",
+        "checksum": "ac6b9009df6f080a2dbbe47bdc4f8e58",
+        "timestamp": "2026-11-17T21:16:48Z"
+      },
+      {
         "version": "1.4.0.0",
         "changelog": "Kumandayla kanal degistirme (LG webOS / tarayici): CH+/CH- ve Yukari/Asagi ile kanal gecisi, rakamla kanal secimi, Yesil ile onceki kanal. Tek baglantili hesapta kanal gecisi (cihazin onceki yayini kapatilir). Hesap/adres degisince veritabaninda kalan eski kanallar temizlenir. Kanallara sira numarasi.",
         "targetAbi": "12.4.0.0",

@@ -25,12 +25,15 @@ public class LiveTvRemoteController : ControllerBase
     {
         Response.Headers.CacheControl = "no-cache";
         var cfg = Plugin.Instance?.Configuration;
-        if (cfg == null || !cfg.LiveRemoteControl)
+        if (cfg == null || !(cfg.LiveRemoteControl || cfg.OpenLibraryCard))
         {
             return Content(string.Empty, "application/javascript; charset=utf-8");
         }
 
-        var settings = "window.__xtreamLiveRemoteCfg={arrows:" + (cfg.LiveRemoteArrows ? "true" : "false") + "};\n";
+        static string B(bool v) => v ? "true" : "false";
+        var settings = "window.__xtreamLiveRemoteCfg={remote:" + B(cfg.LiveRemoteControl)
+            + ",arrows:" + B(cfg.LiveRemoteArrows)
+            + ",libraryCard:" + B(cfg.OpenLibraryCard) + "};\n";
         return Content(settings + Script.Value, "application/javascript; charset=utf-8");
     }
 }

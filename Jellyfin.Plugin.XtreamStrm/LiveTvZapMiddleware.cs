@@ -1,8 +1,10 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.LiveTv;
+using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Controller.Net;
 using MediaBrowser.Controller.Session;
 using Microsoft.AspNetCore.Http;
@@ -41,7 +43,8 @@ public partial class LiveTvZapMiddleware
         ILibraryManager libraryManager,
         ISessionManager sessionManager,
         IMediaSourceManager mediaSourceManager,
-        IAuthorizationContext authorizationContext)
+        IAuthorizationContext authorizationContext,
+        ITranscodeManager transcodeManager)
     {
         string? deviceId = null;
         Guid itemId = Guid.Empty;
@@ -49,7 +52,7 @@ public partial class LiveTvZapMiddleware
         if (HttpMethods.IsPost(context.Request.Method) && Plugin.Instance?.Configuration.LiveRemoteControl == true)
         {
             var match = PlaybackInfoPath().Match(context.Request.Path.Value ?? string.Empty);
-            if (match.Success && Guid.TryParse(match.Groups[1].Value, out itemId) && libraryManager.GetItemById(itemId) is LiveTvChannel)
+            if (match.Success && Guid.TryParse(match.Groups[1].Value, out itemId) && IsLive(libraryManager.GetItemById(itemId), libraryManager))
             {
                 try
                 {
@@ -57,7 +60,7 @@ public partial class LiveTvZapMiddleware
                     if (auth.IsAuthenticated && !string.IsNullOrEmpty(auth.DeviceId))
                     {
                         deviceId = auth.DeviceId;
-                        await CloseOtherLiveStreamsAsync(deviceId, itemId, libraryManager, sessionManager, mediaSourceManager).ConfigureAwait(false);
+                        await CloseOtherLiveStreamsAsync(deviceId, itemId, libraryManager, sessionManager, mediaSourceManager, transcodeManager).ConfigureAwait(false);
                     }
                 }
                 catch (Exception ex)
@@ -108,15 +111,26 @@ public partial class LiveTvZapMiddleware
         Guid itemId,
         ILibraryManager libraryManager,
         ISessionManager sessionManager,
-        IMediaSourceManager mediaSourceManager)
+        IMediaSourceManager mediaSourceManager,
+        ITranscodeManager transcodeManager)
     {
         var candidates = new List<(string Id, string? Name)>();
+        var switching = false;
         foreach (var session in sessionManager.Sessions)
         {
             var playing = session.NowPlayingItem;
+            if (!string.Equals(session.DeviceId, deviceId, StringComparison.Ordinal) || playing == null || playing.Id == itemId)
+            {
+                continue;
+            }
+
+            if (IsLive(libraryManager.GetItemById(playing.Id), libraryManager))
+            {
+                switching = true;
+            }
+
             var id = session.PlayState?.LiveStreamId;
-            if (string.Equals(session.DeviceId, deviceId, StringComparison.Ordinal)
-                && playing != null && playing.Id != itemId && !string.IsNullOrEmpty(id))
+            if (!string.IsNullOrEmpty(id))
             {
                 candidates.Add((id, playing.Name));
             }
@@ -126,6 +140,14 @@ public partial class LiveTvZapMiddleware
         {
             candidates.Add((opened.LiveStreamId, libraryManager.GetItemById(opened.ItemId)?.Name));
             OpenedStreams.TryRemove(deviceId, out _);
+            switching = true;
+        }
+
+        // Klasor gorunumunden acilan kanal Jellyfin canli yayini degildir; saglayiciya ffmpeg baglidir.
+        // Cihaz kanal degistiriyorsa eski donusturme isi hemen kapatilir (tek baglanti hakki bosalir).
+        if (switching)
+        {
+            await transcodeManager.KillTranscodingJobs(deviceId, null, _ => true).ConfigureAwait(false);
         }
 
         // Baska bir cihazin izledigi yayina dokunma (paylasilan yayin).
@@ -146,6 +168,18 @@ public partial class LiveTvZapMiddleware
             _logger.LogInformation("Xtream STRM: kanal degisiyor ({Old} -> {New}), cihazin onceki canli yayini kapatiliyor.", name, newName);
             await mediaSourceManager.CloseLiveStream(id).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>Canli TV kanali ya da "Xtream Canli TV" klasor gorunumundeki bir kanal mi.</summary>
+    private static bool IsLive(BaseItem? item, ILibraryManager libraryManager)
+    {
+        if (item is LiveTvChannel)
+        {
+            return true;
+        }
+
+        return item != null && !item.ChannelId.Equals(Guid.Empty)
+            && libraryManager.GetItemById(item.ChannelId)?.Name == XtreamLiveChannel.ChannelName;
     }
 
     private static string? ReadLiveStreamId(MemoryStream buffer)

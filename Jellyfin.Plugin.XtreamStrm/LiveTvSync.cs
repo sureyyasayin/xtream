@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Xml;
@@ -37,9 +38,12 @@ public class LiveTvSync
             var removed = UpdateLiveTvConfig(null, null, cfg);
             TryDelete(m3uPath);
             TryDelete(epgPath);
+            TryDelete(plugin.LiveCategoriesPath);
             return (0, removed);
         }
 
+        // Kategoriler saglayicinin sirasiyla.
+        var catOrder = new List<string>();
         var catNames = new Dictionary<string, string>();
         using (var cats = await client.GetAsync("get_live_categories", null, ct).ConfigureAwait(false))
         {
@@ -48,22 +52,19 @@ public class LiveTvSync
                 foreach (var el in cats.RootElement.EnumerateArray())
                 {
                     var id = XtreamClient.Str(el, "category_id");
-                    if (id != null)
+                    if (id != null && !catNames.ContainsKey(id))
                     {
+                        catOrder.Add(id);
                         catNames[id] = XtreamClient.Str(el, "category_name") ?? id;
                     }
                 }
             }
         }
 
-        var ext = string.Equals(cfg.LiveFormat, "m3u8", StringComparison.OrdinalIgnoreCase) ? "m3u8" : "ts";
-        var sb = new StringBuilder("#EXTM3U\n");
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        var epgIds = new HashSet<string>(StringComparer.Ordinal);
-        var count = 0;
-
         // Tum kanallar TEK istekle alinir (kategori basina istek hiz sinirina takilir).
         var selectedCats = new HashSet<string>(cfg.LiveCategoryIds, StringComparer.Ordinal);
+        var buckets = new Dictionary<string, List<LiveChannel>>(StringComparer.Ordinal);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         using (var doc = await client.GetAsync("get_live_streams", null, ct).ConfigureAwait(false))
         {
             if (doc.RootElement.ValueKind != JsonValueKind.Array)
@@ -71,45 +72,78 @@ public class LiveTvSync
                 throw new InvalidOperationException("Kanal listesi beklenen bicimde degil.");
             }
 
+            var index = 0;
             foreach (var el in doc.RootElement.EnumerateArray())
             {
+                index++;
                 var cat = XtreamClient.Str(el, "category_id");
-                if (cat == null || !selectedCats.Contains(cat))
-                {
-                    continue;
-                }
-
-                var group = catNames.TryGetValue(cat, out var g) ? g : cat;
                 var id = XtreamClient.Str(el, "stream_id");
                 var name = XtreamClient.Str(el, "name");
-                if (id == null || name == null || !seen.Add(id))
+                if (cat == null || !selectedCats.Contains(cat) || id == null || name == null || !seen.Add(id))
                 {
                     continue;
                 }
 
-                var epg = XtreamClient.Str(el, "epg_channel_id");
-                var icon = XtreamClient.Str(el, "stream_icon");
-
-                // Sira numarasi: kumandada rakamla kanal secimi ve sabit kanal sirasi icin.
-                sb.Append("#EXTINF:-1 tvg-chno=\"").Append(count + 1).Append('"');
-                if (epg != null)
+                var order = double.TryParse(XtreamClient.Str(el, "num"), NumberStyles.Float, CultureInfo.InvariantCulture, out var num) ? num : index;
+                if (!buckets.TryGetValue(cat, out var list))
                 {
-                    epgIds.Add(epg);
-                    sb.Append(" tvg-id=\"").Append(Attr(epg)).Append('"');
+                    buckets[cat] = list = new List<LiveChannel>();
+                    if (!catNames.ContainsKey(cat))
+                    {
+                        catOrder.Add(cat);
+                        catNames[cat] = cat;
+                    }
                 }
 
-                sb.Append(" tvg-name=\"").Append(Attr(name)).Append('"');
-                if (icon != null)
+                list.Add(new LiveChannel(id, name, XtreamClient.Str(el, "epg_channel_id"), XtreamClient.Str(el, "stream_icon"), order));
+            }
+        }
+
+        // Her kategori kendi numara blogunu alir (1-31, 101-145, 201-234...): Jellyfin kategoriyi
+        // saklamadigi icin kanal listesi ve rehber numaraya gore siralanir, kategoriler bir arada kalir.
+        var ext = string.Equals(cfg.LiveFormat, "m3u8", StringComparison.OrdinalIgnoreCase) ? "m3u8" : "ts";
+        var sb = new StringBuilder("#EXTM3U\n");
+        var epgIds = new HashSet<string>(StringComparer.Ordinal);
+        var groups = new List<LiveCategory>();
+        var count = 0;
+        var next = 1;
+        foreach (var cat in catOrder)
+        {
+            if (!buckets.TryGetValue(cat, out var list) || list.Count == 0)
+            {
+                continue;
+            }
+
+            var group = catNames[cat];
+            var first = next;
+            var number = first;
+            foreach (var ch in list.OrderBy(c => c.Order))
+            {
+                sb.Append("#EXTINF:-1 tvg-chno=\"").Append(number).Append('"');
+                if (ch.EpgId != null)
                 {
-                    sb.Append(" tvg-logo=\"").Append(Attr(icon)).Append('"');
+                    epgIds.Add(ch.EpgId);
+                    sb.Append(" tvg-id=\"").Append(Attr(ch.EpgId)).Append('"');
+                }
+
+                sb.Append(" tvg-name=\"").Append(Attr(ch.Name)).Append('"');
+                if (ch.Icon != null)
+                {
+                    sb.Append(" tvg-logo=\"").Append(Attr(ch.Icon)).Append('"');
                 }
 
                 sb.Append(" group-title=\"").Append(Attr(group)).Append('"');
-                sb.Append(',').Append(OneLine(name)).Append('\n');
-                sb.Append(client.LiveUrl(id, ext)).Append('\n');
+                sb.Append(',').Append(OneLine(ch.Name)).Append('\n');
+                sb.Append(client.LiveUrl(ch.Id, ext)).Append('\n');
+                number++;
                 count++;
             }
+
+            groups.Add(new LiveCategory(OneLine(group), first, number - 1));
+            next = ((number - 1) / 100 + 1) * 100 + 1;
         }
+
+        WriteIfChanged(plugin.LiveCategoriesPath, JsonSerializer.Serialize(groups));
 
         var changed = false;
         var content = sb.ToString();
@@ -155,7 +189,7 @@ public class LiveTvSync
         var programmes = 0;
 
         using (var resp = await client.OpenXmltvAsync(ct).ConfigureAwait(false))
-        await using (var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false))
+        await using (var stream = new IdleTimeoutStream(await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false), IdleTimeoutStream.DefaultTimeout, "Yayin akisi (XMLTV)"))
         {
             await Task.Run(
                 () =>
@@ -294,6 +328,20 @@ public class LiveTvSync
 
         return changed;
     }
+
+    private static void WriteIfChanged(string path, string content)
+    {
+        if (!File.Exists(path) || File.ReadAllText(path) != content)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, content, new UTF8Encoding(false));
+        }
+    }
+
+    private sealed record LiveChannel(string Id, string Name, string? EpgId, string? Icon, double Order);
+
+    /// <summary>Kumanda betiginin kullandigi kategori ve numara araligi.</summary>
+    public sealed record LiveCategory(string Name, int First, int Last);
 
     private static string Attr(string value) => OneLine(value).Replace('"', '\'');
 

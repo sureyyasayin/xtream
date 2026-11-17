@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -24,6 +25,7 @@ public class XtreamSyncTask : IScheduledTask
     private readonly IServerConfigurationManager _configurationManager;
     private readonly ITaskManager _taskManager;
     private readonly ITunerHostManager _tunerHostManager;
+    private StreamLinks? _links;
 
     public XtreamSyncTask(
         IHttpClientFactory httpClientFactory,
@@ -75,6 +77,20 @@ public class XtreamSyncTask : IScheduledTask
             manifest.LastMessage = "Xtream bilgileri girilmemis.";
             manifest.Save(plugin.ManifestPath);
             return;
+        }
+
+        if (cfg.HideCredentials && string.IsNullOrEmpty(cfg.StreamSecret))
+        {
+            cfg.StreamSecret = StreamLinks.NewSecret();
+            plugin.SaveConfiguration();
+        }
+
+        _links = new StreamLinks(client, cfg);
+        var linkNote = string.Empty;
+        if (cfg.HideCredentials && !_links.Hidden)
+        {
+            linkNote = " UYARI: Jellyfin adresi bilinmedigi icin sifre .strm dosyalarinda acik kaldi (ayarlardan 'Jellyfin adresi'ni girin).";
+            _logger.LogWarning("Xtream STRM: Jellyfin adresi bilinmiyor; .strm dosyalarina dogrudan Xtream adresi yaziliyor.");
         }
 
         var run = new RunState(manifest);
@@ -150,6 +166,7 @@ public class XtreamSyncTask : IScheduledTask
             RemoveOrphans(manifest, run);
         }
 
+
         var failedCats = run.FailedCategories > 0
             ? " EKSIK: " + string.Join(" | ", run.Errors) + " (sonraki senkronizasyonda yeniden denenir, bu turda silme yapilmadi)."
             : string.Empty;
@@ -162,7 +179,7 @@ public class XtreamSyncTask : IScheduledTask
         var message = !complete
             ? $"HATA: {error} (hicbir dosya silinmedi).{liveText}"
             : $"Film: {run.Movies}, dizi: {run.Series}, bolum: {run.Episodes}. Yeni/guncellenen dosya: {run.Written}, silinen: {run.Deleted}, " +
-              $"mevcut klasor oldugu icin atlanan: {run.SkippedExisting}, hatali dizi: {run.FailedSeries}.{failedCats}{liveText}";
+              $"mevcut klasor oldugu icin atlanan: {run.SkippedExisting}, hatali dizi: {run.FailedSeries}.{failedCats}{liveText}{linkNote}";
 
         SaveManifest(plugin, manifest, run, complete, cleanup, message);
         _logger.LogInformation("Xtream STRM: {Message}", message);
@@ -199,7 +216,34 @@ public class XtreamSyncTask : IScheduledTask
 
     private static readonly Regex TvgNameRegex = new("tvg-name=\"([^\"]*)\"", RegexOptions.Compiled);
     private static readonly Regex GroupTitleRegex = new("group-title=\"([^\"]*)\"", RegexOptions.Compiled);
+    private static readonly Regex LogoRegex = new("tvg-logo=\"([^\"]*)\"", RegexOptions.Compiled);
+    private static readonly Regex SeriesUrlRegex = new(@"/series/[^/]+/[^/]+/(\d+)\.([A-Za-z0-9]{1,5})$", RegexOptions.Compiled);
     private static readonly Regex EpisodeRegex = new(@"^(.+?)\s+S(\d{1,3})\s*E(\d{1,4})\s*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>Ogenin secili kategorileri (category_id ve category_ids, tekrarsiz).</summary>
+    private static List<string> SelectedCategories(JsonElement el, HashSet<string> selected)
+    {
+        var result = new List<string>();
+        var cat = XtreamClient.Str(el, "category_id");
+        if (cat != null && selected.Contains(cat))
+        {
+            result.Add(cat);
+        }
+
+        if (el.TryGetProperty("category_ids", out var ids) && ids.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var id in ids.EnumerateArray())
+            {
+                var s = id.ValueKind == JsonValueKind.String ? id.GetString() : id.ValueKind == JsonValueKind.Number ? id.GetRawText() : null;
+                if (s != null && selected.Contains(s) && !result.Contains(s))
+                {
+                    result.Add(s);
+                }
+            }
+        }
+
+        return result;
+    }
 
     /// <summary>Bir ogenin secili kategorilerden birinde olup olmadigi (category_id ya da category_ids).</summary>
     private static bool InSelected(JsonElement el, HashSet<string> selected)
@@ -250,8 +294,34 @@ public class XtreamSyncTask : IScheduledTask
             return;
         }
 
+        // Kategori adlari ve sirasi ("Xtream Filmler" kutusu icin); alinamazsa katalog bu tur yenilenmez.
+        var catOrder = new List<string>();
+        var catNames = new Dictionary<string, string>(StringComparer.Ordinal);
+        var catalogOk = true;
+        try
+        {
+            using var cats = await client.GetAsync("get_vod_categories", null, ct).ConfigureAwait(false);
+            if (cats.RootElement.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var c in cats.RootElement.EnumerateArray())
+                {
+                    if (XtreamClient.Str(c, "category_id") is string cid && !catNames.ContainsKey(cid))
+                    {
+                        catOrder.Add(cid);
+                        catNames[cid] = (XtreamClient.Str(c, "category_name") ?? cid).Trim();
+                    }
+                }
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            catalogOk = false;
+            _logger.LogWarning("Xtream STRM: film kategori adlari alinamadi: {Error}", ex.Message);
+        }
+
         progress.Report(5);
         var selected = new HashSet<string>(cfg.MovieCategoryIds, StringComparer.Ordinal);
+        var vod = new Dictionary<string, VodCategory>(StringComparer.Ordinal);
         var total = Math.Max(1, doc.RootElement.GetArrayLength());
         var index = 0;
 
@@ -276,11 +346,31 @@ public class XtreamSyncTask : IScheduledTask
             }
 
             var ext = CleanExt(XtreamClient.Str(el, "container_extension"), "mp4");
-            var (baseName, folder) = Naming.Build(
-                name,
-                XtreamClient.Str(el, "year"),
-                XtreamClient.Str(el, "tmdb") ?? XtreamClient.Str(el, "tmdb_id"),
-                cfg.StripPrefixes);
+            var year = XtreamClient.Str(el, "year");
+            var tmdb = XtreamClient.Str(el, "tmdb") ?? XtreamClient.Str(el, "tmdb_id");
+
+            // "Xtream Filmler" kutusu: filmin secili her kategorisine (kutuphanedeki klasorden bagimsiz).
+            var entry = new VodItem
+            {
+                Id = id,
+                Name = Naming.Build(name, year, null, cfg.StripPrefixes).Base,
+                Ext = ext,
+                Icon = XtreamClient.Str(el, "stream_icon"),
+                Year = ParseYear(year),
+                Rating = ParseRating(XtreamClient.Str(el, "rating")),
+                Tmdb = tmdb
+            };
+            foreach (var catId in SelectedCategories(el, selected))
+            {
+                if (!vod.TryGetValue(catId, out var vc))
+                {
+                    vod[catId] = vc = new VodCategory { Name = catNames.GetValueOrDefault(catId, catId) };
+                }
+
+                vc.Items.Add(entry);
+            }
+
+            var (baseName, folder) = Naming.Build(name, year, tmdb, cfg.StripPrefixes);
 
             var dir = Path.Combine(cfg.MoviesPath, folder);
             if (!run.Claim(dir))
@@ -290,19 +380,41 @@ public class XtreamSyncTask : IScheduledTask
             }
 
             var file = Path.Combine(dir, baseName + ".strm");
+            entry.Path = file;
             if (!run.Desired.Add(file))
             {
                 continue; // ayni film birden fazla kez listelenmis
             }
 
-            if (WriteIfChanged(file, client.MovieUrl(id, ext)))
+            if (WriteIfChanged(file, _links!.Movie(id, ext)))
             {
                 run.Written++;
             }
 
             run.Movies++;
         }
+
+        if (catalogOk)
+        {
+            var catalog = new VodCatalog();
+            foreach (var catId in catOrder.Concat(vod.Keys.Except(catOrder)))
+            {
+                if (vod.TryGetValue(catId, out var vc) && vc.Items.Count > 0)
+                {
+                    vc.Items.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.CurrentCultureIgnoreCase));
+                    catalog.Categories.Add(vc);
+                }
+            }
+
+            CatalogStore.Save(Plugin.Instance!.VodCatalogPath, catalog);
+        }
     }
+
+    private static int? ParseYear(string? value) =>
+        value != null && value.Length >= 4 && int.TryParse(value.AsSpan(0, 4), NumberStyles.Integer, CultureInfo.InvariantCulture, out var y) && y > 1880 ? y : null;
+
+    private static float? ParseRating(string? value) =>
+        float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var r) && r > 0 ? r : null;
 
     /// <summary>
     /// Dizileri saglayicinin M3U listesinden (tek istek, tum bolumler) okur. Dizi basina
@@ -313,6 +425,7 @@ public class XtreamSyncTask : IScheduledTask
         // 1) Secili kategori kimliklerinin adlari (M3U'da bolumler kategori adiyla gruplanir).
         var selectedIds = new HashSet<string>(cfg.SeriesCategoryIds, StringComparer.Ordinal);
         var selectedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var categoryOrder = new List<string>();
         try
         {
             using var cats = await client.GetAsync("get_series_categories", null, ct).ConfigureAwait(false);
@@ -322,9 +435,9 @@ public class XtreamSyncTask : IScheduledTask
                 {
                     var id = XtreamClient.Str(el, "category_id");
                     var name = XtreamClient.Str(el, "category_name");
-                    if (id != null && name != null && selectedIds.Contains(id))
+                    if (id != null && name != null && selectedIds.Contains(id) && selectedNames.Add(name.Trim()))
                     {
-                        selectedNames.Add(name.Trim());
+                        categoryOrder.Add(name.Trim());
                     }
                 }
             }
@@ -337,7 +450,7 @@ public class XtreamSyncTask : IScheduledTask
         }
 
         // 2) Dizi kunyeleri (yil, tmdb) - yalnizca daha iyi eslesme icin; alinamasa da devam edilir.
-        var meta = new Dictionary<string, (string? Year, string? Tmdb)>(StringComparer.OrdinalIgnoreCase);
+        var meta = new Dictionary<string, (string? Year, string? Tmdb, string? Cover, string? Plot, string? Rating)>(StringComparer.OrdinalIgnoreCase);
         try
         {
             using var all = await client.GetAsync("get_series", null, ct).ConfigureAwait(false);
@@ -351,7 +464,10 @@ public class XtreamSyncTask : IScheduledTask
                         meta.TryAdd(
                             name.Trim(),
                             (XtreamClient.Str(el, "year") ?? XtreamClient.Str(el, "releaseDate") ?? XtreamClient.Str(el, "release_date"),
-                             XtreamClient.Str(el, "tmdb") ?? XtreamClient.Str(el, "tmdb_id")));
+                             XtreamClient.Str(el, "tmdb") ?? XtreamClient.Str(el, "tmdb_id"),
+                             XtreamClient.Str(el, "cover"),
+                             XtreamClient.Str(el, "plot"),
+                             XtreamClient.Str(el, "rating")));
                     }
                 }
             }
@@ -365,16 +481,25 @@ public class XtreamSyncTask : IScheduledTask
 
         // 3) Bolumler: M3U akisi satir satir okunur (onlarca MB olabilir, bellege alinmaz).
         var folders = new Dictionary<string, (string Base, string Dir, bool Claimed)>(StringComparer.OrdinalIgnoreCase);
+
+        // "Xtream Diziler" kutusu: kategori -> dizi -> bolumler (kutuphanedeki klasorden bagimsiz).
+        var catalog = new Dictionary<string, Dictionary<string, CatalogSeries>>(StringComparer.OrdinalIgnoreCase);
+        var seenEpisodes = new HashSet<string>(StringComparer.Ordinal);
+        var catalogOk = false;
         try
         {
             using var resp = await client.OpenM3uAsync(ct).ConfigureAwait(false);
             var length = resp.Content.Headers.ContentLength ?? 0;
-            await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            await using var raw = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+
+            // Saglayici akisi yarida durdurursa sonsuza kadar beklenmez.
+            await using var stream = new IdleTimeoutStream(raw, IdleTimeoutStream.DefaultTimeout, "Bolum listesi (M3U)");
             using var reader = new StreamReader(stream, Encoding.UTF8);
 
             string? line;
             string? pendingName = null;
             string? pendingGroup = null;
+            string? pendingLogo = null;
             long read = 0;
             long lines = 0;
 
@@ -393,6 +518,8 @@ public class XtreamSyncTask : IScheduledTask
                     var nm = TvgNameRegex.Match(line);
                     var gm = GroupTitleRegex.Match(line);
                     pendingGroup = gm.Success ? gm.Groups[1].Value.Trim() : null;
+                    var lm = LogoRegex.Match(line);
+                    pendingLogo = lm.Success && lm.Groups[1].Value.Length > 0 ? lm.Groups[1].Value : null;
                     pendingName = nm.Success && nm.Groups[1].Value.Length > 0
                         ? nm.Groups[1].Value
                         : (line.LastIndexOf(',') is var c and >= 0 ? line[(c + 1)..] : null);
@@ -406,8 +533,10 @@ public class XtreamSyncTask : IScheduledTask
 
                 var title = pendingName;
                 var group = pendingGroup;
+                var logo = pendingLogo;
                 pendingName = null;
                 pendingGroup = null;
+                pendingLogo = null;
 
                 if (title == null || group == null
                     || !line.Contains("/series/", StringComparison.Ordinal)
@@ -425,6 +554,31 @@ public class XtreamSyncTask : IScheduledTask
                 var seriesName = m.Groups[1].Value.Trim();
                 var season = int.Parse(m.Groups[2].Value);
                 var number = int.Parse(m.Groups[3].Value);
+
+                var um = SeriesUrlRegex.Match(line.Trim());
+                if (um.Success && seenEpisodes.Add(group + "|" + seriesName + "|" + season + "|" + number))
+                {
+                    if (!catalog.TryGetValue(group, out var bucket))
+                    {
+                        catalog[group] = bucket = new Dictionary<string, CatalogSeries>(StringComparer.OrdinalIgnoreCase);
+                    }
+
+                    if (!bucket.TryGetValue(seriesName, out var si))
+                    {
+                        meta.TryGetValue(seriesName, out var sm);
+                        bucket[seriesName] = si = new CatalogSeries
+                        {
+                            Name = Naming.Build(seriesName, sm.Year, null, cfg.StripPrefixes).Base,
+                            Cover = sm.Cover ?? logo,
+                            Plot = sm.Plot,
+                            Year = ParseYear(sm.Year),
+                            Rating = ParseRating(sm.Rating),
+                            Tmdb = sm.Tmdb
+                        };
+                    }
+
+                    si.Episodes.Add(new EpisodeItem { S = season, E = number, Id = um.Groups[1].Value, Ext = um.Groups[2].Value.ToLowerInvariant() });
+                }
 
                 if (!folders.TryGetValue(seriesName, out var f))
                 {
@@ -450,24 +604,51 @@ public class XtreamSyncTask : IScheduledTask
                     continue;
                 }
 
+                if (catalog.TryGetValue(group, out var cb) && cb.TryGetValue(seriesName, out var cs) && cs.Dir == null)
+                {
+                    cs.Dir = f.Dir;
+                    cs.Base = f.Base;
+                }
+
                 var file = Path.Combine(f.Dir, $"Season {season:00}", $"{f.Base} S{season:00}E{number:00}.strm");
                 if (!run.Desired.Add(file))
                 {
                     continue; // ayni bolum iki kez listelenmis
                 }
 
-                if (WriteIfChanged(file, line.Trim()))
+                if (WriteIfChanged(file, _links!.FromM3u(line.Trim())))
                 {
                     run.Written++;
                 }
 
                 run.Episodes++;
             }
+
+            catalogOk = true;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             run.Fail("Bolum listesi (M3U) alinamadi ya da yarim kaldi: " + ex.Message);
             _logger.LogWarning("Xtream STRM: bolum listesi (M3U) okunamadi: {Error}", ex.Message);
+        }
+
+        // Yarim kalan listeyle katalog yenilenmez (kutu bosalmasin).
+        if (catalogOk)
+        {
+            var result = new SeriesCatalog();
+            foreach (var name in categoryOrder.Concat(catalog.Keys.Except(categoryOrder, StringComparer.OrdinalIgnoreCase)))
+            {
+                if (catalog.TryGetValue(name, out var bucket) && bucket.Count > 0)
+                {
+                    result.Categories.Add(new SeriesCategory
+                    {
+                        Name = name,
+                        Series = bucket.Values.OrderBy(s => s.Name, StringComparer.CurrentCultureIgnoreCase).ToList()
+                    });
+                }
+            }
+
+            CatalogStore.Save(Plugin.Instance!.SeriesCatalogPath, result);
         }
     }
 
@@ -624,6 +805,7 @@ public class XtreamSyncTask : IScheduledTask
         public Manifest Manifest { get; }
 
         public HashSet<string> Desired { get; } = new(StringComparer.Ordinal);
+
 
         public HashSet<string> Claimed { get; } = new(StringComparer.Ordinal);
 

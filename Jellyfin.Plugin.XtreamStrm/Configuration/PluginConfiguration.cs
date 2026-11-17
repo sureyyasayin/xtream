@@ -43,6 +43,18 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>Ayni anda acilabilecek yayin sayisi (0 = sinirsiz).</summary>
     public int LiveTunerCount { get; set; }
 
+    /// <summary>"Xtream Canli TV" kutusu (canli kanallar Xtream kategorilerine gore).</summary>
+    public bool ShowLiveChannel { get; set; } = true;
+
+    /// <summary>"Xtream Filmler" kutusu (filmler Xtream kategorilerine gore).</summary>
+    public bool ShowVodChannel { get; set; } = true;
+
+    /// <summary>"Xtream Diziler" kutusu (diziler Xtream kategorilerine gore).</summary>
+    public bool ShowSeriesChannel { get; set; } = true;
+
+    /// <summary>Xtream Filmler / Diziler kutusunda bir ogeye tiklaninca kutuphanedeki kartini ac.</summary>
+    public bool OpenLibraryCard { get; set; } = true;
+
     /// <summary>Web istemcisine (LG webOS, tarayici) kumandayla kanal degistirme ekle.</summary>
     public bool LiveRemoteControl { get; set; } = true;
 
@@ -54,6 +66,18 @@ public class PluginConfiguration : BasePluginConfiguration
     /// sonra gecici olarak 404 dondurur; 2500 ms dakikada 24 istek eder.
     /// </summary>
     public int RequestDelayMs { get; set; } = 2500;
+
+    /// <summary>.strm dosyalarina Xtream kullanici adi/sifresi yerine eklentinin imzali adresini yaz.</summary>
+    public bool HideCredentials { get; set; } = true;
+
+    /// <summary>Oynaticilarin ulastigi Jellyfin adresi (bos ise JELLYFIN_PublishedServerUrl kullanilir).</summary>
+    public string ServerUrl { get; set; } = string.Empty;
+
+    /// <summary>Yayinlari yonlendirmek yerine sunucu uzerinden aktar (sifre hicbir cihaza ulasmaz).</summary>
+    public bool ProxyStreams { get; set; }
+
+    /// <summary>Imzali adresler icin sunucuya ozel gizli anahtar (ilk senkronizasyonda uretilir).</summary>
+    public string StreamSecret { get; set; } = string.Empty;
 
     /// <summary>Xtream listesinden kalkan icerigin .strm dosyalarini sil.</summary>
     public bool RemoveOrphans { get; set; } = true;

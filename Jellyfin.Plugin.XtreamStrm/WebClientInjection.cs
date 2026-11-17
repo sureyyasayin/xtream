@@ -1,5 +1,6 @@
 using System.Text;
 using MediaBrowser.Controller;
+using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Plugins;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -16,6 +17,11 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     {
         serviceCollection.AddTransient<IStartupFilter, WebClientInjectionStartupFilter>();
         serviceCollection.AddHostedService<StaleChannelCleanupService>();
+
+        // Jellyfin 12.x kanallari (IChannel) yalnizca servis kaydindan alir.
+        serviceCollection.AddSingleton<IChannel, XtreamLiveChannel>();
+        serviceCollection.AddSingleton<IChannel, XtreamVodChannel>();
+        serviceCollection.AddSingleton<IChannel, XtreamSeriesChannel>();
     }
 }
 
@@ -105,7 +111,7 @@ public class WebClientInjectionMiddleware
 
     private static bool ShouldInject(HttpRequest request)
     {
-        if (!HttpMethods.IsGet(request.Method) || Plugin.Instance?.Configuration.LiveRemoteControl != true)
+        if (!HttpMethods.IsGet(request.Method) || Plugin.Instance?.Configuration is not { } cfg || !(cfg.LiveRemoteControl || cfg.OpenLibraryCard))
         {
             return false;
         }

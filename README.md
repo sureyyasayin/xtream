@@ -33,6 +33,16 @@ Senkronizasyon her gece 04:00'te kendiliğinden tekrarlanır; saat Zamanlanmış
 
 Bilgileriniz yalnızca kendi Jellyfin sunucunuzda saklanır. Eklenti yalnızca sizin girdiğiniz Xtream sunucusuyla konuşur, başka hiçbir yere veri göndermez.
 
+## Şifre gizliliği
+
+Xtream yayın adreslerinin içinde kullanıcı adı ve şifre bulunur. Eklenti varsayılan olarak bunları `.strm` dosyalarına yazmaz; dosyalara eklentinin imzalı adresi yazılır (`http://jellyfin-adresi/XtreamStrm/Play/...`). Böylece şifre dosyalarda, Jellyfin arayüzünde ve kütüphane bilgilerinde görünmez; hesap ya da adres değişince dosyaların yeniden yazılması da gerekmez.
+
+- **Yönlendirme (varsayılan):** Oynatma başlarken eklenti asıl adrese yönlendirir; film doğrudan sağlayıcıdan akar, sunucuya ek yük binmez. Teknik bilgisi olan bir kütüphane kullanıcısı oynatma sırasında asıl adresi yine de görebilir.
+- **Sunucu üzerinden aktarma (isteğe bağlı):** Ayarlardan açılırsa film ve diziler sunucu üzerinden aktarılır, şifre hiçbir cihaza ulaşmaz. Sunucuyu güvenmediğiniz kişilerle paylaşıyorsanız açın; dışarıdan izlerken sunucunuzun internet bağlantısını kullanır.
+- **Jellyfin adresi:** Oynatıcıların Jellyfin'e ulaştığı adres gerekir. Ayarlarda boş bırakılırsa `JELLYFIN_PublishedServerUrl` kullanılır; ikisi de yoksa şifre gizlenemez ve senkronizasyon özeti bunu bildirir.
+- Her adres sunucuya özel gizli bir anahtarla imzalıdır; imzasız ya da değiştirilmiş adres reddedilir.
+- Canlı TV kanal listesi sunucuda ayrı bir dosyada durur ve kullanıcılara gösterilmez.
+
 ## Ayarlar hakkında
 
 - **İstekler arası bekleme:** Çoğu Xtream sağlayıcısı kısa sürede çok istek gelince bir süre yanıt vermez. Varsayılan 2500 ms çoğu sağlayıcı için güvenlidir; sağlayıcınız izin veriyorsa düşürebilirsiniz.
@@ -43,9 +53,13 @@ Bilgileriniz yalnızca kendi Jellyfin sunucunuzda saklanır. Eklenti yalnızca s
 
 - Film: `Film Adı (Yıl) [tmdbid-123]/Film Adı (Yıl).strm`
 - Dizi: `Dizi Adı (Yıl)/Season 01/Dizi Adı (Yıl) S01E01.strm`
-- Canlı TV: seçilen kategorilerdeki kanallar Jellyfin'in **Canlı TV** bölümüne "Xtream" adlı tuner olarak eklenir; kanallara sıra numarası verilir; yayın akışı (EPG) yalnızca bu kanallara süzülerek bağlanır. Canlı TV kapatılırsa tuner kaldırılır.
+- Canlı TV: seçilen kategorilerdeki kanallar Jellyfin'in **Canlı TV** bölümüne "Xtream" adlı tuner olarak eklenir; yayın akışı (EPG) yalnızca bu kanallara süzülerek bağlanır. Canlı TV kapatılırsa tuner kaldırılır.
+- Kategoriler korunur: Jellyfin kanal kategorisi saklamadığı için kanallar Xtream kategorilerinin sırasıyla dizilir ve her kategori kendi numara bloğunu alır (ör. ULUSAL 1–31, HABER 101–145, SPOR 201–234). Jellyfin'in kanal listesi ve rehberi numaraya göre sıralandığından kategoriler bir arada görünür; numaradan da kategori anlaşılır.
+- **Xtream kutuları:** Jellyfin'deki Filmler, Diziler ve Canlı TV olduğu gibi kalır; ana sayfada (Medyam) ayrıca **Xtream Canlı TV**, **Xtream Filmler** ve **Xtream Diziler** kutuları görünür. İçlerinde Xtream kategorileri Xtream'deki sırayla klasör olarak durur (diziler: kategori → dizi → sezon → bölüm). Veriler senkronizasyonun yazdığı katalogdan okunur, gezinirken Xtream'e istek gitmez. Her kutu ayarlardan ayrı ayrı açılıp kapatılabilir.
+- Xtream Filmler / Diziler'de bir film, dizi ya da bölüme tıklanınca kütüphanedeki kartı açılır (afiş, özet, izlenme durumu ortak; LG webOS uygulaması ve tarayıcı). Bu da ayarlardan kapatılabilir; kapalıyken kutudaki kopya açılır ve izlenme durumu ayrı tutulur.
 - Xtream hesabı ya da adresi değişince Jellyfin'de kalan eski (artık açılmayan) kanal kayıtları kendiliğinden temizlenir.
-- Kumandayla kanal değiştirme (LG webOS Jellyfin uygulaması ve tarayıcı): canlı kanal izlerken **CH+ / CH-** ve alt çubuk kapalıyken **Yukarı / Aşağı** sonraki / önceki kanala geçer; **rakam** tuşları kanal numarasına gider; **Yeşil** tuş bir önceki kanala döner. Art arda basınca ekranda kanal adı görünür, tuş bırakılınca son seçilen kanal açılır. Tek bağlantılı hesapta da çalışır: aynı cihaz yeni kanal isteyince önceki yayını kapatılır (başka cihazların yayınlarına dokunulmaz). Eklenti bunun için Jellyfin web arayüzüne küçük bir betik ekler (Jellyfin dosyalarına dokunmaz); ayarlardan kapatılabilir. Samsung (Tizen), Android TV ve diğer yerel uygulamalar arayüzü kendi içinde taşıdığı için bu özellik orada çalışmaz; canlı TV'nin kendisi her uygulamada çalışır.
+- Kumandayla kanal değiştirme (LG webOS Jellyfin uygulaması ve tarayıcı): canlı kanal izlerken **CH+ / CH-** ve alt çubuk kapalıyken **Yukarı / Aşağı** sonraki / önceki kanala geçer; **rakam** tuşları kanal numarasına gider; **Yeşil** tuş bir önceki kanala döner; **Kırmızı / Mavi** önceki / sonraki kategorinin ilk kanalına atlar. Art arda basınca ekranda kanal adı ve kategorisi görünür, tuş bırakılınca son seçilen kanal açılır. Tek bağlantılı hesapta da çalışır: aynı cihaz yeni kanal isteyince önceki yayını kapatılır (başka cihazların yayınlarına dokunulmaz). Eklenti bunun için Jellyfin web arayüzüne küçük bir betik ekler (Jellyfin dosyalarına dokunmaz); ayarlardan kapatılabilir. Samsung (Tizen), Android TV ve diğer yerel uygulamalar arayüzü kendi içinde taşıdığı için bu özellik orada çalışmaz; canlı TV'nin kendisi her uygulamada çalışır.
+- Bir film sağlayıcıda boş geliyorsa (dosyası bozuk ya da kaldırılmış), aynı adlı ve aynı yıllı başka bir kopyası (ör. 4K yerine HD kategorisindeki) kendiliğinden açılır.
 - Aynı isimde bir klasör zaten varsa (kendi dosyalarınız) o içerik atlanır; mevcut dosyalarınıza dokunulmaz.
 - Xtream listesinden kalkan ya da seçimi kaldırılan kategorilere ait kısayollar silinir (ayarlardan kapatılabilir). Yalnızca eklentinin kendi oluşturduğu dosyalar silinir.
 - Sunucuya ulaşılamazsa hiçbir dosya silinmez.

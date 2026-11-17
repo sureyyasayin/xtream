@@ -29,8 +29,28 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// <summary>Canli TV kanal listesi (Jellyfin M3U tuner'i bu dosyayi okur).</summary>
     public string LiveM3uPath => Path.Combine(DataFolderPath, "live.m3u");
 
+    /// <summary>"Xtream Filmler" kutusunun katalogu.</summary>
+    public string VodCatalogPath => Path.Combine(DataFolderPath, "vod-catalog.json");
+
+    /// <summary>"Xtream Diziler" kutusunun katalogu.</summary>
+    public string SeriesCatalogPath => Path.Combine(DataFolderPath, "series-catalog.json");
+
+    /// <summary>Canli TV kategorileri ve numara araliklari (kumanda betigi icin).</summary>
+    public string LiveCategoriesPath => Path.Combine(DataFolderPath, "live-categories.json");
+
     /// <summary>Secili kanallara suzulmus yayin akisi (XMLTV).</summary>
     public string LiveEpgPath => Path.Combine(DataFolderPath, "epg.xml");
+
+    /// <summary>Ayar sayfasi eski bir kopyayi kaydederse gizli anahtar kaybolmasin (tum adresler gecersiz kalir).</summary>
+    public override void UpdateConfiguration(BasePluginConfiguration configuration)
+    {
+        if (configuration is PluginConfiguration incoming && string.IsNullOrEmpty(incoming.StreamSecret))
+        {
+            incoming.StreamSecret = Configuration.StreamSecret;
+        }
+
+        base.UpdateConfiguration(configuration);
+    }
 
     public IEnumerable<PluginPageInfo> GetPages()
     {

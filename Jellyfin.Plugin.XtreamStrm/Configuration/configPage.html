@@ -93,12 +93,49 @@
                     <input id="xsLiveRemote" type="checkbox" is="emby-checkbox" />
                     <span>Kumandayla kanal değiştirme (LG webOS uygulaması ve tarayıcı)</span>
                 </label>
-                <div class="fieldDescription">Canlı kanal izlerken CH+ / CH- sonraki / önceki kanala geçer, rakam tuşları kanal numarasına gider, Yeşil tuş bir önceki kanala döner. Değişiklikten sonra TV'deki Jellyfin uygulamasını kapatıp açın.</div>
+                <div class="fieldDescription">Canlı kanal izlerken CH+ / CH- sonraki / önceki kanala geçer, rakam tuşları kanal numarasına gider, Yeşil tuş bir önceki kanala döner, Kırmızı / Mavi önceki / sonraki Xtream kategorisine atlar. Kanallar Xtream kategorilerinin sırasıyla dizilir ve her kategori kendi numara bloğunu alır (1–31, 101–145, 201–...). Değişiklikten sonra TV'deki Jellyfin uygulamasını kapatıp açın.</div>
                 <label class="checkboxContainer">
                     <input id="xsLiveRemoteArrows" type="checkbox" is="emby-checkbox" />
                     <span>Yukarı / Aşağı oklarıyla da kanal değiştir (alt çubuk kapalıyken)</span>
                 </label>
                 <div class="fieldDescription" style="margin-bottom:1.5em;">Kapalıyken Yukarı / Aşağı Jellyfin'deki gibi sesi değiştirir.</div>
+
+                <h3>Xtream kutuları</h3>
+                <div class="fieldDescription" style="margin-bottom:.5em;">Jellyfin'deki Filmler, Diziler ve Canlı TV olduğu gibi kalır. Bu kutular ana sayfada (Medyam) ayrıca görünür ve içerikleri Xtream kategorilerine göre, Xtream'deki sırayla listeler. Kapatılan kutu kullanıcılara gösterilmez.</div>
+                <label class="checkboxContainer">
+                    <input id="xsShowLive" type="checkbox" is="emby-checkbox" />
+                    <span>Xtream Canlı TV</span>
+                </label>
+                <label class="checkboxContainer">
+                    <input id="xsShowVod" type="checkbox" is="emby-checkbox" />
+                    <span>Xtream Filmler</span>
+                </label>
+                <label class="checkboxContainer">
+                    <input id="xsShowSeries" type="checkbox" is="emby-checkbox" />
+                    <span>Xtream Diziler</span>
+                </label>
+                <label class="checkboxContainer">
+                    <input id="xsLibraryCard" type="checkbox" is="emby-checkbox" />
+                    <span>Xtream Filmler / Diziler'de tıklanınca kütüphanedeki film / dizi kartını aç</span>
+                </label>
+                <div class="fieldDescription" style="margin-bottom:1.5em;">Açıkken afiş, özet ve izlenme durumu kütüphanedeki gibi olur (LG webOS uygulaması ve tarayıcı). Kapalıyken kutudaki kopya açılır; izlenme durumu ayrı tutulur.</div>
+
+                <h3>Şifre gizliliği</h3>
+                <label class="checkboxContainer">
+                    <input id="xsHideCreds" type="checkbox" is="emby-checkbox" />
+                    <span>Xtream kullanıcı adı ve şifresini .strm dosyalarına yazma</span>
+                </label>
+                <div class="fieldDescription">Dosyalara Xtream adresi yerine eklentinin imzalı adresi yazılır; şifre dosyalarda, Jellyfin arayüzünde ve kütüphane bilgilerinde görünmez. Hesap ya da adres değişince dosyaların yeniden yazılması da gerekmez. Ek yük yoktur: oynatma başlarken eklenti asıl adrese yönlendirir. Açıp kapattıktan sonra senkronizasyon dosyaları bir kez yeniden yazar.</div>
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="xsServerUrl">Jellyfin adresi</label>
+                    <input id="xsServerUrl" type="text" is="emby-input" />
+                    <div class="fieldDescription">Oynatıcıların (TV, telefon) Jellyfin'e ulaştığı adres, örn. <code>http://192.168.1.10:8096</code>. Boş bırakılırsa Jellyfin'in yayınlanan adresi (<code>JELLYFIN_PublishedServerUrl</code>) kullanılır; o da yoksa şifre gizlenemez.</div>
+                </div>
+                <label class="checkboxContainer">
+                    <input id="xsProxy" type="checkbox" is="emby-checkbox" />
+                    <span>Yayınları sunucu üzerinden aktar</span>
+                </label>
+                <div class="fieldDescription" style="margin-bottom:1.5em;">Yönlendirmede, teknik bilgisi olan bir kullanıcı oynatma sırasında asıl adresi görebilir. Bu seçenek açıkken film ve diziler sunucu üzerinden aktarılır, şifre hiçbir cihaza ulaşmaz. Evde yük çok azdır; dışarıdan izlerken sunucunuzun internet bağlantısını kullanır. Sunucuyu yalnızca siz kullanıyorsanız gerekmez.</div>
 
                 <h3>Seçenekler</h3>
                 <div class="inputContainer">
@@ -199,7 +236,14 @@
                     $(page, '#xsLiveTunerCount').value = c.LiveTunerCount || 0;
                     $(page, '#xsLiveRemote').checked = c.LiveRemoteControl !== false;
                     $(page, '#xsLiveRemoteArrows').checked = c.LiveRemoteArrows !== false;
-                    placeholder(page);
+                    $(page, '#xsHideCreds').checked = c.HideCredentials !== false;
+                    $(page, '#xsServerUrl').value = c.ServerUrl || '';
+                    $(page, '#xsServerUrl').placeholder = 'Boş: yayınlanan adres (' + (ApiClient.serverAddress() || '') + ')';
+                    $(page, '#xsProxy').checked = !!c.ProxyStreams;
+                    $(page, '#xsShowLive').checked = c.ShowLiveChannel !== false;
+                    $(page, '#xsShowVod').checked = c.ShowVodChannel !== false;
+                    $(page, '#xsShowSeries').checked = c.ShowSeriesChannel !== false;
+                    $(page, '#xsLibraryCard').checked = c.OpenLibraryCard !== false;                    placeholder(page);
                     Dashboard.hideLoadingMsg();
                     if (c.BaseUrl && c.Username) { loadCats(page, true); }
                 });
@@ -228,7 +272,13 @@
                     c.LiveTunerCount = parseInt($(page, '#xsLiveTunerCount').value, 10) || 0;
                     c.LiveRemoteControl = $(page, '#xsLiveRemote').checked;
                     c.LiveRemoteArrows = $(page, '#xsLiveRemoteArrows').checked;
-                    return ApiClient.updatePluginConfiguration(pluginId, c).then(function (r) {
+                    c.HideCredentials = $(page, '#xsHideCreds').checked;
+                    c.ServerUrl = $(page, '#xsServerUrl').value.trim().replace(/\/+$/, '');
+                    c.ProxyStreams = $(page, '#xsProxy').checked;
+                    c.ShowLiveChannel = $(page, '#xsShowLive').checked;
+                    c.ShowVodChannel = $(page, '#xsShowVod').checked;
+                    c.ShowSeriesChannel = $(page, '#xsShowSeries').checked;
+                    c.OpenLibraryCard = $(page, '#xsLibraryCard').checked;                    return ApiClient.updatePluginConfiguration(pluginId, c).then(function (r) {
                         if (!quiet) { Dashboard.processPluginConfigurationUpdateResult(r); }
                     });
                 });

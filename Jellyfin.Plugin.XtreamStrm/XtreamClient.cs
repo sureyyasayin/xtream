@@ -144,7 +144,7 @@ public sealed class XtreamClient
                 return null;
             }
         }
-        else if (ex is not (HttpRequestException or IOException or TaskCanceledException))
+        else if (ex is not (HttpRequestException or IOException or TaskCanceledException or TimeoutException))
         {
             return null;
         }
@@ -163,7 +163,7 @@ public sealed class XtreamClient
         var label = action ?? "login";
         var query = (string.IsNullOrEmpty(action) ? string.Empty : "&action=" + action) + (extraQuery ?? string.Empty);
         using var resp = await OpenOnceAsync("/player_api.php", query, label, "application/json, */*", ct).ConfigureAwait(false);
-        await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        await using var stream = new IdleTimeoutStream(await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false), IdleTimeoutStream.DefaultTimeout, label);
         try
         {
             return await JsonDocument.ParseAsync(stream, cancellationToken: ct).ConfigureAwait(false);
