@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "1.5.1.0",
+        "changelog": "Bilgisayarda Xtream Filmler / Diziler kategori kartinin resmine tiklayinca acilmama sorunu duzeltildi; kutunun ana sayfasindaki kategori tiklamalarina artik hic dokunulmaz.",
+        "targetAbi": "12.4.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/sureyyasayin/xtream/main/releases/xtream-strm_1.5.1.0.zip",
+        "checksum": "62ff8ac4c348ea9449463a4d5e223fa1",
+        "timestamp": "2026-11-17T21:24:02Z"
+      },
+      {
         "version": "1.5.0.0",
         "changelog": "Xtream Canli TV / Filmler / Diziler kutulari: Xtream kategorileri Xtream sirasiyla, ayarlardan ayri ayri acilip kapatilir; kutudan tiklaninca kutuphanedeki film/dizi karti acilir. Canli TV kanallari kategori bloklariyla numaralanir, Kirmizi/Mavi ile kategori atlanir. Sifre gizliligi: .strm dosyalarinda kullanici adi/sifre yok (imzali adres; istege bagli sunucu uzerinden aktarma); ilk senkronizasyonda dosyalar bir kez yeniden yazilir. Saglayicida bos gelen filmde ayni filmin baska kopyasi acilir. Yarida kalan indirmeler 60 sn sonra kesilir. Jellyfin 12.4 kanal kaydi duzeltmesi.",
         "targetAbi": "12.4.0.0",

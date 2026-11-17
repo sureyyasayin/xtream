@@ -608,8 +608,9 @@
 
         var a = api();
         loadFolderChannelId().then(function () {
+            // Kutunun kok sayfasinda yalnizca kategori klasorleri var (kutuphane karsiligi yok).
             if (catalogChannelIds[parentId]) {
-                return { ChannelId: parentId };
+                return null;
             }
 
             return getJson('Users/' + a.getCurrentUserId() + '/Items/' + parentId);
@@ -650,6 +651,7 @@
         }
 
         var id = card.getAttribute('data-id');
+        var origin = e.target;
         consume(e);
         lookupLibrary(id).then(function (target) {
             if (target) {
@@ -657,9 +659,13 @@
                 var serverId = card.getAttribute('data-serverid') || (a.serverId && a.serverId()) || '';
                 location.hash = '#/details?id=' + target + (serverId ? '&serverId=' + serverId : '');
             } else {
+                // Karsiligi yok: tiklama, tiklanan ogenin kendisine geri verilir (resim, ad, dugme).
                 card.setAttribute('data-xtream-skip', '1');
-                card.click();
-                card.removeAttribute('data-xtream-skip');
+                try {
+                    origin.click();
+                } finally {
+                    card.removeAttribute('data-xtream-skip');
+                }
             }
         });
     }
