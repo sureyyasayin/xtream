@@ -2,6 +2,9 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using Jellyfin.Data.Enums;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.XtreamStrm;
@@ -18,11 +21,13 @@ public sealed partial class MovieFallback
     private static readonly TimeSpan CacheTime = TimeSpan.FromMinutes(10);
 
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ILibraryManager _libraryManager;
     private readonly ILogger _logger;
 
-    public MovieFallback(IHttpClientFactory httpClientFactory, ILogger logger)
+    public MovieFallback(IHttpClientFactory httpClientFactory, ILibraryManager libraryManager, ILogger logger)
     {
         _httpClientFactory = httpClientFactory;
+        _libraryManager = libraryManager;
         _logger = logger;
     }
 
@@ -42,7 +47,7 @@ public sealed partial class MovieFallback
         var result = (Id: id, Ext: ext);
         if (!await HasDataAsync(client.MovieUrl(id, ext), ct).ConfigureAwait(false))
         {
-            foreach (var alt in Alternatives(id, ext))
+            foreach (var alt in Alternatives(id, ext).Concat(TmdbAlternatives(id)).DistinctBy(a => a.Id).Take(8))
             {
                 if (await HasDataAsync(client.MovieUrl(alt.Id, alt.Ext), ct).ConfigureAwait(false))
                 {
@@ -111,6 +116,57 @@ public sealed partial class MovieFallback
             .OrderBy(i => string.Equals(i.Ext, ext, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
             .Take(5)
             .ToList();
+    }
+
+    /// <summary>
+    /// Saglayici ayni filmi farkli adlarla verebilir ("Ay Dogarken" / "Moonrise"). Jellyfin ikisini de
+    /// ayni TMDb kaydina eslediyse, kutuphanedeki ayni TMDb kimlikli diger filmlerin kopyalari.
+    /// </summary>
+    private List<VodItem> TmdbAlternatives(string id)
+    {
+        var result = new List<VodItem>();
+        var plugin = Plugin.Instance;
+        if (plugin == null)
+        {
+            return result;
+        }
+
+        var all = CatalogStore.Load<VodCatalog>(plugin.VodCatalogPath).Categories.SelectMany(c => c.Items).ToList();
+        var me = all.FirstOrDefault(i => i.Id == id);
+        if (me?.Path == null)
+        {
+            return result;
+        }
+
+        string? tmdb = null;
+        _libraryManager.FindByPath(me.Path, false)?.ProviderIds.TryGetValue("Tmdb", out tmdb);
+        tmdb ??= me.Tmdb;
+        if (string.IsNullOrEmpty(tmdb))
+        {
+            return result;
+        }
+
+        var byPath = all.Where(i => i.Path != null && i.Id != id)
+            .GroupBy(i => i.Path!, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+        var others = _libraryManager.GetItemList(new InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { BaseItemKind.Movie },
+            HasAnyProviderId = new Dictionary<string, string> { ["Tmdb"] = tmdb },
+            Recursive = true
+        });
+
+        foreach (var o in others)
+        {
+            if (o.Path != null && o.Path != me.Path && byPath.TryGetValue(o.Path, out var v))
+            {
+                result.Add(v);
+            }
+        }
+
+        result.AddRange(all.Where(i => i.Id != id && i.Tmdb == tmdb));
+        return result;
     }
 
     private static int? YearOf(VodItem item)

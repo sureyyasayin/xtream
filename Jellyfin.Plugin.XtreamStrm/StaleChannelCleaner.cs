@@ -99,6 +99,60 @@ public class StaleChannelCleaner
     }
 }
 
+/// <summary>
+/// 1.5.x'te "Xtream Filmler / Diziler" ogeleri film/dizi/bolum olarak olusuyordu; Jellyfin bunlar
+/// icin TMDb/TheTVDB aramasi yapip kutuphane taramasini saatlerce uzatiyordu. Artik duz video ve
+/// klasor olarak olusuyorlar; eski turdeki ogeler bir kez silinir (kutu acilinca yenileri olusur).
+/// Kutuphanedeki filmlere ve dizilere dokunulmaz (yalnizca bu iki kutunun ogeleri).
+/// </summary>
+public static class OldChannelItems
+{
+    public static int Remove(ILibraryManager libraryManager, ILogger logger)
+    {
+        var channelIds = libraryManager.GetItemList(new InternalItemsQuery { IncludeItemTypes = new[] { BaseItemKind.Channel } })
+            .Where(c => c.Name is "Xtream Filmler" or "Xtream Diziler")
+            .Select(c => c.Id)
+            .ToArray();
+        if (channelIds.Length == 0)
+        {
+            return 0;
+        }
+
+        // Once yapraklar, sonra klasorler (dizi silinince altindakiler de gider).
+        var order = new[] { BaseItemKind.Movie, BaseItemKind.Episode, BaseItemKind.Season, BaseItemKind.Series };
+        var removed = 0;
+        foreach (var kind in order)
+        {
+            var items = libraryManager.GetItemList(new InternalItemsQuery
+            {
+                ChannelIds = channelIds,
+                IncludeItemTypes = new[] { kind },
+                Recursive = true
+            });
+
+            foreach (var item in items)
+            {
+                try
+                {
+                    libraryManager.DeleteItem(item, new DeleteOptions { DeleteFileLocation = false }, false);
+                    removed++;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogDebug("Xtream STRM: kutu ogesi silinemedi ({Name}): {Error}", item.Name, ex.Message);
+                }
+            }
+        }
+
+        if (removed > 0)
+        {
+            logger.LogInformation("Xtream STRM: Xtream Filmler / Diziler kutularindaki {Count} eski oge kaldirildi (meta veri aramasi yapmayan yeni ogeler olusacak).", removed);
+        }
+
+        return removed;
+    }
+}
+
 /// <summary>Jellyfin acildiktan kisa sure sonra eski kanal temizligini bir kez calistirir.</summary>
 public class StaleChannelCleanupService : BackgroundService
 {
@@ -119,6 +173,7 @@ public class StaleChannelCleanupService : BackgroundService
         {
             // Canli TV ve kutuphane acilisini bitirsin.
             await Task.Delay(TimeSpan.FromSeconds(90), stoppingToken).ConfigureAwait(false);
+            OldChannelItems.Remove(_libraryManager, _logger);
             if (Plugin.Instance?.Configuration.SyncLive != true)
             {
                 return;

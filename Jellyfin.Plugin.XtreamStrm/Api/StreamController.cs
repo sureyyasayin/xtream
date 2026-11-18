@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -24,11 +25,13 @@ public partial class StreamController : ControllerBase
     };
 
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ILibraryManager _libraryManager;
     private readonly ILogger<StreamController> _logger;
 
-    public StreamController(IHttpClientFactory httpClientFactory, ILogger<StreamController> logger)
+    public StreamController(IHttpClientFactory httpClientFactory, ILibraryManager libraryManager, ILogger<StreamController> logger)
     {
         _httpClientFactory = httpClientFactory;
+        _libraryManager = libraryManager;
         _logger = logger;
     }
 
@@ -62,7 +65,7 @@ public partial class StreamController : ControllerBase
         // Film saglayicida bos geliyorsa ayni filmin baska bir kopyasi acilir.
         if (kind == "movie")
         {
-            (id, ext) = await new MovieFallback(_httpClientFactory, _logger).ResolveAsync(client, id, ext, HttpContext.RequestAborted).ConfigureAwait(false);
+            (id, ext) = await new MovieFallback(_httpClientFactory, _libraryManager, _logger).ResolveAsync(client, id, ext, HttpContext.RequestAborted).ConfigureAwait(false);
         }
 
         var target = kind switch

@@ -17,7 +17,8 @@ namespace Jellyfin.Plugin.XtreamStrm;
 public abstract class XtreamCatalogChannel : IChannel, IRequiresMediaInfoCallback, IHasCacheKey, IDisableMediaSourceDisplay
 {
     /// <summary>Ogelerin bicimi degisince artirilir (Jellyfin onbellegi yenilensin).</summary>
-    private const int FormatVersion = 1;
+    // 2: ogeler duz video/klasor (TMDb/TVDb aramasi yapilmasin; tiklaninca kutuphane karti acilir).
+    private const int FormatVersion = 2;
 
     private readonly IHttpClientFactory _httpClientFactory;
 
@@ -93,9 +94,6 @@ public abstract class XtreamCatalogChannel : IChannel, IRequiresMediaInfoCallbac
     /// <summary>Jellyfin klasorleri ada gore siralar; sira numarasi Xtream sirasini korur.</summary>
     protected static string Numbered(int index, string name) =>
         (index + 1).ToString(CultureInfo.InvariantCulture) + " · " + name;
-
-    protected static Dictionary<string, string> Providers(string? tmdb) =>
-        string.IsNullOrEmpty(tmdb) ? new Dictionary<string, string>() : new Dictionary<string, string> { ["Tmdb"] = tmdb };
 }
 
 /// <summary>"Xtream Filmler": kategori klasorleri -> filmler.</summary>
@@ -116,7 +114,7 @@ public sealed class XtreamVodChannel : XtreamCatalogChannel
 
     public override InternalChannelFeatures GetChannelFeatures() => new()
     {
-        ContentTypes = new List<ChannelMediaContentType> { ChannelMediaContentType.Movie },
+        ContentTypes = new List<ChannelMediaContentType> { ChannelMediaContentType.Clip },
         MediaTypes = new List<ChannelMediaType> { ChannelMediaType.Video }
     };
 
@@ -152,11 +150,10 @@ public sealed class XtreamVodChannel : XtreamCatalogChannel
                 Name = m.Name,
                 Type = ChannelItemType.Media,
                 MediaType = ChannelMediaType.Video,
-                ContentType = ChannelMediaContentType.Movie,
+                ContentType = ChannelMediaContentType.Clip,
                 ImageUrl = m.Icon,
                 ProductionYear = m.Year,
                 CommunityRating = m.Rating,
-                ProviderIds = Providers(m.Tmdb)
             });
         }
 
@@ -182,7 +179,7 @@ public sealed class XtreamSeriesChannel : XtreamCatalogChannel
 
     public override InternalChannelFeatures GetChannelFeatures() => new()
     {
-        ContentTypes = new List<ChannelMediaContentType> { ChannelMediaContentType.Episode },
+        ContentTypes = new List<ChannelMediaContentType> { ChannelMediaContentType.Clip },
         MediaTypes = new List<ChannelMediaType> { ChannelMediaType.Video }
     };
 
@@ -227,12 +224,11 @@ public sealed class XtreamSeriesChannel : XtreamCatalogChannel
                         Id = SeriesId(c, s),
                         Name = s.Name,
                         Type = ChannelItemType.Folder,
-                        FolderType = ChannelFolderType.Series,
+                        FolderType = ChannelFolderType.Container,
                         ImageUrl = s.Cover,
                         Overview = s.Plot,
                         ProductionYear = s.Year,
                         CommunityRating = s.Rating,
-                        ProviderIds = Providers(s.Tmdb)
                     });
                 }
 
@@ -250,7 +246,7 @@ public sealed class XtreamSeriesChannel : XtreamCatalogChannel
                             Id = SeasonId(c, s, season),
                             Name = "Sezon " + season.ToString(CultureInfo.InvariantCulture),
                             Type = ChannelItemType.Folder,
-                            FolderType = ChannelFolderType.Season,
+                            FolderType = ChannelFolderType.Container,
                             IndexNumber = season,
                             ImageUrl = s.Cover,
                             Overview = s.Plot
@@ -271,7 +267,7 @@ public sealed class XtreamSeriesChannel : XtreamCatalogChannel
                             Name = "Bölüm " + e.E.ToString(CultureInfo.InvariantCulture),
                             Type = ChannelItemType.Media,
                             MediaType = ChannelMediaType.Video,
-                            ContentType = ChannelMediaContentType.Episode,
+                            ContentType = ChannelMediaContentType.Clip,
                             SeriesName = s.Name,
                             IndexNumber = e.E,
                             ParentIndexNumber = season,

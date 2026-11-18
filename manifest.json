@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "1.5.2.0",
+        "changelog": "Saglayicida bos gelen filmde farkli adla kayitli kopyalar da denenir (ayni TMDb kimligi; or. Ay Dogarken / Moonrise). Xtream Filmler / Diziler kutu ogeleri duz video ve klasor olarak olusur: Jellyfin bunlar icin TMDb/TheTVDB aramasi yapmaz, kutuphane taramasi %94'te saatlerce beklemez. Eski turdeki kutu ogeleri bir kez temizlenir.",
+        "targetAbi": "12.4.0.0",
+        "sourceUrl": "https://raw.githubusercontent.com/sureyyasayin/xtream/main/releases/xtream-strm_1.5.2.0.zip",
+        "checksum": "bc50bd28fd4c4c2e2b36a9c9085bcc73",
+        "timestamp": "2026-11-18T18:31:16Z"
+      },
+      {
         "version": "1.5.1.0",
         "changelog": "Bilgisayarda Xtream Filmler / Diziler kategori kartinin resmine tiklayinca acilmama sorunu duzeltildi; kutunun ana sayfasindaki kategori tiklamalarina artik hic dokunulmaz.",
         "targetAbi": "12.4.0.0",
